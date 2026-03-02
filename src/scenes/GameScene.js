@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { getControlConfig } from '../config/controls.js';
+import { DEBUG_TOOLS_ENABLED, isDebugFlagEnabled } from '../config/debug.js';
 
 const WORLD_WIDTH = 2200;
 const WORLD_HEIGHT = 1400;
@@ -18,12 +19,27 @@ const FORWARD_SPAWN_DOT_THRESHOLD = 0.15;
 const PLAYER_HIT_COOLDOWN_MS = 650;
 const ENEMY_CONTACT_HIT_COOLDOWN_MS = 1200;
 const CONTACT_HIT_DISTANCE_PX = 42;
+const PLAYER_RECOIL_DURATION_MS = 320;
+const PLAYER_RECOIL_DECAY_PER_FRAME = 0.89;
 const PICKUP_CONTACT_GRACE_MS = 320;
 const PICKUP_OVERLAP_PROTECTION_RADIUS_PX = 24;
 const PICKUP_WALL_PADDING_PX = 20;
 const PICKUP_SAFE_ROOM_PADDING_PX = 36;
-const OBJECTIVE_NODE_HEALTH = 140;
-const ENEMY_NODE_SPAWN_CLEARANCE_PX = 150;
+const OBJECTIVE_NODE_BASE_HEALTH = 130;
+const OBJECTIVE_NODE_HEALTH_PER_SECTOR = 12;
+const OBJECTIVE_NODE_MAX_HEALTH = 190;
+const ENEMY_NODE_SPAWN_CLEARANCE_PX = 165;
+const ENEMY_NODE_SPAWN_CLEARANCE_BONUS_PER_SECTOR = 8;
+const ENEMY_NODE_SPAWN_CLEARANCE_MAX_PX = 210;
+const PICKUP_BASE_LIFETIME_MS = 9000;
+const PICKUP_LIFETIME_BONUS_PER_SECTOR_MS = 700;
+const PICKUP_MAX_LIFETIME_MS = 13000;
+const OBJECTIVE_NODE_WALL_CLEARANCE_PX = 52;
+const OBJECTIVE_NODE_START_CLEARANCE_PX = 200;
+const OBJECTIVE_NODE_MIN_SPACING_PX = 220;
+const RESUME_CONTACT_GRACE_MS = 450;
+const GAME_OVER_DELAY_MS = 2400;
+const GAMEPLAY_TUNING_DEBUG_TOGGLE_KEY = 'gameplayTuningDebugEnabled';
 const PAUSE_BUTTON_ARMED_KEY = 'pauseButtonArmed';
 const STARTING_RESOURCES = {
   ammo: 64,
@@ -62,6 +78,8 @@ export class GameScene extends Phaser.Scene {
     this.bossSuppressedUntil = 0;
     this.lastPlayerHitAt = 0;
     this.pickupContactGraceUntil = 0;
+    this.playerRecoilUntil = 0;
+    this.playerRecoilVelocity = new Phaser.Math.Vector2(0, 0);
     this.previousGamepadButtonState = {};
     this.resources = { ...STARTING_RESOURCES };
     this.objective = {
@@ -77,6 +95,8 @@ export class GameScene extends Phaser.Scene {
     this.safeRoom = null;
     this.hud = {};
     this.controls = null;
+    this.gameplayTuningDebugEnabled = false;
+    this.hasQueuedGameOverTransition = false;
   }
 
   create(data = {}) {
@@ -111,10 +131,12 @@ export class GameScene extends Phaser.Scene {
         this.input.gamepad.off('connected', this.onGamepadConnected, this);
       }
     });
+    this.events.on('resume', this.onResumeFromPause, this);
 
     this.runStartedAt = this.time.now;
     this.nextEnemySpawnAt = this.time.now + START_SPAWN_GRACE_MS;
     this.nextResourceSpawnAt = this.time.now + 1200;
+    this.gameplayTuningDebugEnabled = this.resolveGameplayTuningDebugEnabled();
 
     if (this.registry.get(PAUSE_BUTTON_ARMED_KEY) === undefined) {
       this.registry.set(PAUSE_BUTTON_ARMED_KEY, true);
@@ -136,6 +158,8 @@ export class GameScene extends Phaser.Scene {
     this.bossSuppressedUntil = 0;
     this.lastPlayerHitAt = 0;
     this.pickupContactGraceUntil = 0;
+    this.playerRecoilUntil = 0;
+    this.playerRecoilVelocity.set(0, 0);
     this.previousGamepadButtonState = {};
     this.resources = { ...STARTING_RESOURCES };
     if (carryResources && carriedResources) {
@@ -155,6 +179,7 @@ export class GameScene extends Phaser.Scene {
     };
     this.state = 'playing';
     this.hasQueuedSectorTransition = false;
+    this.hasQueuedGameOverTransition = false;
   }
 
   buildTextures() {
@@ -221,40 +246,95 @@ export class GameScene extends Phaser.Scene {
   buildWorld() {
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    this.add.rectangle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, 0x0b120e);
+    const layout = this.getSectorLayoutDefinition();
+
+    this.add.rectangle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, layout.backgroundColor);
 
     for (let index = 0; index < 120; index += 1) {
       const x = Phaser.Math.Between(20, WORLD_WIDTH - 20);
       const y = Phaser.Math.Between(20, WORLD_HEIGHT - 20);
       const alpha = Phaser.Math.FloatBetween(0.08, 0.24);
-      this.add.rectangle(x, y, Phaser.Math.Between(2, 6), Phaser.Math.Between(2, 6), 0x8ced67, alpha);
+      this.add.rectangle(x, y, Phaser.Math.Between(2, 6), Phaser.Math.Between(2, 6), layout.ambientParticleColor, alpha);
     }
 
-    const walls = [
+    const perimeterWalls = [
       [WORLD_WIDTH / 2, 20, WORLD_WIDTH, 40],
       [WORLD_WIDTH / 2, WORLD_HEIGHT - 20, WORLD_WIDTH, 40],
       [20, WORLD_HEIGHT / 2, 40, WORLD_HEIGHT],
-      [WORLD_WIDTH - 20, WORLD_HEIGHT / 2, 40, WORLD_HEIGHT],
-      [WORLD_WIDTH * 0.36, WORLD_HEIGHT * 0.24, 420, 22],
-      [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.24, 360, 22],
-      [WORLD_WIDTH * 0.26, WORLD_HEIGHT * 0.5, 320, 22],
-      [WORLD_WIDTH * 0.58, WORLD_HEIGHT * 0.5, 300, 22],
-      [WORLD_WIDTH * 0.84, WORLD_HEIGHT * 0.5, 250, 22],
-      [WORLD_WIDTH * 0.34, WORLD_HEIGHT * 0.76, 380, 22],
-      [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.76, 330, 22],
-      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.15, 22, 220],
-      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.47, 22, 200],
-      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.82, 22, 220],
-      [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.66, 22, 220],
-      [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.34, 22, 220]
+      [WORLD_WIDTH - 20, WORLD_HEIGHT / 2, 40, WORLD_HEIGHT]
     ];
+    const walls = [...perimeterWalls, ...layout.internalWalls];
 
     this.walls = this.physics.add.staticGroup();
     walls.forEach(([x, y, width, height]) => {
-      const wall = this.add.rectangle(x, y, width, height, 0x163124);
+      const wall = this.add.rectangle(x, y, width, height, layout.wallColor);
       this.physics.add.existing(wall, true);
       this.walls.add(wall);
     });
+  }
+
+  getSectorLayoutDefinition() {
+    const themeIndex = (this.sectorIndex - 1) % 3;
+
+    const layouts = [
+      {
+        backgroundColor: 0x0b120e,
+        ambientParticleColor: 0x8ced67,
+        wallColor: 0x163124,
+        internalWalls: [
+          [WORLD_WIDTH * 0.36, WORLD_HEIGHT * 0.24, 420, 22],
+          [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.24, 360, 22],
+          [WORLD_WIDTH * 0.26, WORLD_HEIGHT * 0.5, 320, 22],
+          [WORLD_WIDTH * 0.58, WORLD_HEIGHT * 0.5, 300, 22],
+          [WORLD_WIDTH * 0.84, WORLD_HEIGHT * 0.5, 250, 22],
+          [WORLD_WIDTH * 0.34, WORLD_HEIGHT * 0.76, 380, 22],
+          [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.76, 330, 22],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.15, 22, 220],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.47, 22, 200],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.82, 22, 220],
+          [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.66, 22, 220],
+          [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.34, 22, 220]
+        ]
+      },
+      {
+        backgroundColor: 0x0c1119,
+        ambientParticleColor: 0x7fc0ff,
+        wallColor: 0x1f2f4a,
+        internalWalls: [
+          [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.3, 260, 22],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.3, 280, 22],
+          [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.3, 260, 22],
+          [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.68, 260, 22],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.68, 280, 22],
+          [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.68, 260, 22],
+          [WORLD_WIDTH * 0.32, WORLD_HEIGHT * 0.5, 22, 280],
+          [WORLD_WIDTH * 0.68, WORLD_HEIGHT * 0.5, 22, 280],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 220, 22],
+          [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.5, 22, 220],
+          [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.5, 22, 220]
+        ]
+      },
+      {
+        backgroundColor: 0x130d12,
+        ambientParticleColor: 0xff9bc2,
+        wallColor: 0x46213b,
+        internalWalls: [
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.22, 760, 22],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.78, 760, 22],
+          [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.5, 22, 520],
+          [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.5, 22, 520],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 360, 22],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.38, 22, 180],
+          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.62, 22, 180],
+          [WORLD_WIDTH * 0.36, WORLD_HEIGHT * 0.38, 180, 22],
+          [WORLD_WIDTH * 0.64, WORLD_HEIGHT * 0.62, 180, 22],
+          [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.22, 180, 22],
+          [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.78, 180, 22]
+        ]
+      }
+    ];
+
+    return layouts[themeIndex];
   }
 
   buildPlayer() {
@@ -278,23 +358,16 @@ export class GameScene extends Phaser.Scene {
 
   buildObjectiveNodes() {
     this.objectiveNodes = this.physics.add.staticGroup();
-    const preferredNodePositions = [
-      [340, 260],
-      [WORLD_WIDTH - 260, 260],
-      [WORLD_WIDTH * 0.5, WORLD_HEIGHT - 260],
-      [WORLD_WIDTH * 0.18, WORLD_HEIGHT * 0.82],
-      [WORLD_WIDTH * 0.82, WORLD_HEIGHT * 0.82],
-      [WORLD_WIDTH * 0.25, WORLD_HEIGHT * 0.34],
-      [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.62]
-    ];
+    const preferredNodePositions = this.getPreferredNodePositionsForSector();
 
     const requiredNodes = this.getRequiredNodeCount();
     const nodePositions = this.getValidObjectiveNodePositions(preferredNodePositions, requiredNodes);
 
+    const nodeHealth = this.getObjectiveNodeHealth();
     nodePositions.forEach(([x, y]) => {
       const node = this.objectiveNodes.create(x, y, 'node');
       node.setData('active', true);
-      node.setData('health', OBJECTIVE_NODE_HEALTH);
+      node.setData('health', nodeHealth);
       node.setTint(0x8d78ff);
     });
 
@@ -305,8 +378,51 @@ export class GameScene extends Phaser.Scene {
     this.objective.stage = 'destroyNodes';
   }
 
+  getPreferredNodePositionsForSector() {
+    const themeIndex = (this.sectorIndex - 1) % 3;
+
+    if (themeIndex === 1) {
+      return [
+        [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.2],
+        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.2],
+        [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.2],
+        [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.8],
+        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.8],
+        [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.8],
+        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5]
+      ];
+    }
+
+    if (themeIndex === 2) {
+      return [
+        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.16],
+        [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.28],
+        [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.28],
+        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5],
+        [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.72],
+        [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.72],
+        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.86]
+      ];
+    }
+
+    return [
+      [340, 260],
+      [WORLD_WIDTH - 260, 260],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT - 260],
+      [WORLD_WIDTH * 0.18, WORLD_HEIGHT * 0.82],
+      [WORLD_WIDTH * 0.82, WORLD_HEIGHT * 0.82],
+      [WORLD_WIDTH * 0.25, WORLD_HEIGHT * 0.34],
+      [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.62]
+    ];
+  }
+
   getRequiredNodeCount() {
-    return Phaser.Math.Clamp(3 + Math.floor((this.sectorIndex - 1) / 2), 3, 5);
+    return Phaser.Math.Clamp(3 + Math.floor((this.sectorIndex - 1) / 3), 3, 5);
+  }
+
+  getObjectiveNodeHealth() {
+    const scaledHealth = OBJECTIVE_NODE_BASE_HEALTH + (this.sectorIndex - 1) * OBJECTIVE_NODE_HEALTH_PER_SECTOR;
+    return Phaser.Math.Clamp(scaledHealth, OBJECTIVE_NODE_BASE_HEALTH, OBJECTIVE_NODE_MAX_HEALTH);
   }
 
   getValidObjectiveNodePositions(preferredPositions, requiredCount) {
@@ -317,12 +433,16 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      if (this.isPositionBlockedByWall(x, y, 26)) {
+      if (this.isPositionBlockedByWall(x, y, OBJECTIVE_NODE_WALL_CLEARANCE_PX)) {
         return;
       }
 
-      const tooCloseToPlayerStart = Phaser.Math.Distance.Between(x, y, 120, 120) < 180;
+      const tooCloseToPlayerStart = Phaser.Math.Distance.Between(x, y, 120, 120) < OBJECTIVE_NODE_START_CLEARANCE_PX;
       if (tooCloseToPlayerStart) {
+        return;
+      }
+
+      if (this.isPositionTooCloseToExistingNodes(x, y, validPositions, OBJECTIVE_NODE_MIN_SPACING_PX)) {
         return;
       }
 
@@ -333,10 +453,16 @@ export class GameScene extends Phaser.Scene {
     while (validPositions.length < requiredCount && attempts < 80) {
       const randomX = Phaser.Math.Between(120, WORLD_WIDTH - 120);
       const randomY = Phaser.Math.Between(120, WORLD_HEIGHT - 120);
-      const blocked = this.isPositionBlockedByWall(randomX, randomY, 26);
-      const closeToStart = Phaser.Math.Distance.Between(randomX, randomY, 120, 120) < 180;
+      const blocked = this.isPositionBlockedByWall(randomX, randomY, OBJECTIVE_NODE_WALL_CLEARANCE_PX);
+      const closeToStart = Phaser.Math.Distance.Between(randomX, randomY, 120, 120) < OBJECTIVE_NODE_START_CLEARANCE_PX;
+      const tooCloseToOtherNodes = this.isPositionTooCloseToExistingNodes(
+        randomX,
+        randomY,
+        validPositions,
+        OBJECTIVE_NODE_MIN_SPACING_PX
+      );
 
-      if (!blocked && !closeToStart) {
+      if (!blocked && !closeToStart && !tooCloseToOtherNodes) {
         validPositions.push([randomX, randomY]);
       }
 
@@ -344,6 +470,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     return validPositions.slice(0, requiredCount);
+  }
+
+  isPositionTooCloseToExistingNodes(x, y, existingPositions, minimumSpacing) {
+    return existingPositions.some(([existingX, existingY]) => {
+      return Phaser.Math.Distance.Between(x, y, existingX, existingY) < minimumSpacing;
+    });
   }
 
   isPositionBlockedByWall(x, y, padding = 0) {
@@ -379,7 +511,6 @@ export class GameScene extends Phaser.Scene {
       d: 'D',
       sprint: 'SHIFT'
     });
-
     if (this.input.gamepad) {
       this.input.gamepad.once('connected', this.onGamepadConnected, this);
       if (this.input.gamepad.total > 0) {
@@ -453,8 +584,19 @@ export class GameScene extends Phaser.Scene {
   buildHud() {
     this.sound.volume = this.registry.get('sfxVolume') ?? 0.7;
 
-    const style = { fontFamily: 'Arial', fontSize: '18px', color: '#ddf8d4' };
-    this.hud.resources = this.add.text(16, 16, '', style).setScrollFactor(0).setDepth(10);
+    const style = { fontFamily: 'Arial', fontSize: '24px', color: '#ddf8d4' };
+    this.hud.resources = this.add.text(16, 16, '', style).setScrollFactor(0).setDepth(10).setLineSpacing(4);
+    this.hud.objectives = this.add
+      .text(this.scale.width - 16, 16, '', {
+        fontFamily: 'Arial',
+        fontSize: '22px',
+        color: '#ddf8d4',
+        align: 'right'
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(10)
+      .setLineSpacing(4);
   }
 
   configureCollisions() {
@@ -472,20 +614,14 @@ export class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     const dt = delta / 1000;
+
+    if (this.state !== 'playing') {
+      return;
+    }
+
     if (this.isPauseRequested()) {
       this.scene.launch('PauseScene');
       this.scene.pause();
-      return;
-    }
-
-    if (this.state === 'ended') {
-      if (Phaser.Input.Keyboard.JustDown(this.keys.interact)) {
-        this.scene.restart({ sectorIndex: this.sectorIndex });
-      }
-      return;
-    }
-
-    if (this.state !== 'playing') {
       return;
     }
 
@@ -503,7 +639,29 @@ export class GameScene extends Phaser.Scene {
     return weapon || WEAPON_LOADOUT[0];
   }
 
+  resolveGameplayTuningDebugEnabled() {
+    if (!DEBUG_TOOLS_ENABLED) {
+      this.registry.set(GAMEPLAY_TUNING_DEBUG_TOGGLE_KEY, false);
+      return false;
+    }
+
+    const registryValue = this.registry.get(GAMEPLAY_TUNING_DEBUG_TOGGLE_KEY);
+    if (typeof registryValue === 'boolean') {
+      return registryValue;
+    }
+
+    const enabledFromUrl = isDebugFlagEnabled('debug') || isDebugFlagEnabled('debugTuning');
+    this.registry.set(GAMEPLAY_TUNING_DEBUG_TOGGLE_KEY, enabledFromUrl);
+    return enabledFromUrl;
+  }
+
   handleMovement() {
+    if (this.time.now < this.playerRecoilUntil) {
+      this.player.setVelocity(this.playerRecoilVelocity.x, this.playerRecoilVelocity.y);
+      this.playerRecoilVelocity.scale(PLAYER_RECOIL_DECAY_PER_FRAME);
+      return;
+    }
+
     const speed = this.isSprintActive() ? 285 : 200;
     const movementVector = this.getKeyboardMovementVector();
     this.applyGamepadMovementOverride(movementVector);
@@ -613,11 +771,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   getBrowserConnectedGamepad() {
-    if (typeof navigator === 'undefined' || !navigator.getGamepads) {
+    const browserNavigator = typeof globalThis !== 'undefined' ? globalThis.navigator : undefined;
+    if (!browserNavigator || !browserNavigator.getGamepads) {
       return null;
     }
 
-    const pads = navigator.getGamepads();
+    const pads = browserNavigator.getGamepads();
     for (let index = 0; index < pads.length; index += 1) {
       if (pads[index]) {
         return pads[index];
@@ -776,7 +935,7 @@ export class GameScene extends Phaser.Scene {
     this.resources.contamination = Phaser.Math.Clamp(this.resources.contamination + contaminationGain * dt, 0, MAX_CONTAMINATION);
 
     if (this.resources.health <= 0) {
-      this.endRun('You were consumed by the bloom. Press E to restart.');
+      this.endRun();
     }
   }
 
@@ -785,7 +944,7 @@ export class GameScene extends Phaser.Scene {
 
     if (time > this.nextEnemySpawnAt && activeNodes > 0) {
       const totalEnemies = this.enemies.countActive(true);
-      const maxActiveEnemies = 4 + activeNodes * 2 + Math.floor(this.waveLevel) + Math.min(this.sectorIndex - 1, 3);
+      const maxActiveEnemies = this.getMaxActiveEnemies(activeNodes);
       if (totalEnemies < maxActiveEnemies) {
         const minSpawnDistance = this.getEnemyMinSpawnDistance(time);
         const useForwardSector = this.spawnedEnemyCount < FIRST_WAVE_FORWARD_SPAWNS;
@@ -800,7 +959,7 @@ export class GameScene extends Phaser.Scene {
 
     if (time > this.nextResourceSpawnAt) {
       this.spawnPickup();
-      this.nextResourceSpawnAt = time + Phaser.Math.Between(3000, 5500);
+      this.nextResourceSpawnAt = time + this.getPickupSpawnDelayMs();
     }
 
     this.enemies.getChildren().forEach((enemy) => {
@@ -830,6 +989,33 @@ export class GameScene extends Phaser.Scene {
     return NORMAL_MIN_SPAWN_DISTANCE;
   }
 
+  getMaxActiveEnemies(activeNodes) {
+    const sectorPressureBonus = Math.floor((this.sectorIndex - 1) / 2);
+    const wavePressureBonus = Math.floor(Math.max(0, this.waveLevel - 1) * 0.7);
+    const baseEnemyBudget = 4 + activeNodes * 2;
+    const softCap = 7 + activeNodes * 3 + sectorPressureBonus * 2;
+
+    return Phaser.Math.Clamp(baseEnemyBudget + sectorPressureBonus + wavePressureBonus, 5, softCap);
+  }
+
+  getPickupSpawnDelayMs() {
+    const reductionPerSector = (this.sectorIndex - 1) * 220;
+    const minDelay = Phaser.Math.Clamp(3000 - reductionPerSector, 2200, 3000);
+    const maxDelay = Phaser.Math.Clamp(5500 - reductionPerSector, 3800, 5500);
+
+    return Phaser.Math.Between(minDelay, maxDelay);
+  }
+
+  getEnemyNodeSpawnClearancePx() {
+    const scaledClearance = ENEMY_NODE_SPAWN_CLEARANCE_PX + (this.sectorIndex - 1) * ENEMY_NODE_SPAWN_CLEARANCE_BONUS_PER_SECTOR;
+    return Phaser.Math.Clamp(scaledClearance, ENEMY_NODE_SPAWN_CLEARANCE_PX, ENEMY_NODE_SPAWN_CLEARANCE_MAX_PX);
+  }
+
+  getPickupLifetimeMs() {
+    const scaledLifetime = PICKUP_BASE_LIFETIME_MS + (this.sectorIndex - 1) * PICKUP_LIFETIME_BONUS_PER_SECTOR_MS;
+    return Phaser.Math.Clamp(scaledLifetime, PICKUP_BASE_LIFETIME_MS, PICKUP_MAX_LIFETIME_MS);
+  }
+
   spawnEnemy(minDistanceFromPlayer = NORMAL_MIN_SPAWN_DISTANCE, useForwardSector = false) {
     const spawnPosition = this.getSpawnPositionAwayFromPlayer(minDistanceFromPlayer, useForwardSector);
     const type = this.getEnemyTypeByRoll(Phaser.Math.Between(1, 100));
@@ -847,12 +1033,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   getSpawnPositionAwayFromPlayer(minDistanceFromPlayer, useForwardSector = false) {
+    const nodeSpawnClearance = this.getEnemyNodeSpawnClearancePx();
+
     for (let attempt = 0; attempt < 16; attempt += 1) {
       const edge = Phaser.Math.Between(0, 3);
       const position = this.getSpawnPositionByEdge(edge);
       const distanceToPlayer = Phaser.Math.Distance.Between(position.x, position.y, this.player.x, this.player.y);
       const validSector = !useForwardSector || this.isPositionInForwardSector(position);
-      const clearOfActiveNodes = !this.isPositionNearActiveObjectiveNode(position, ENEMY_NODE_SPAWN_CLEARANCE_PX);
+      const clearOfActiveNodes = !this.isPositionNearActiveObjectiveNode(position, nodeSpawnClearance);
       if (distanceToPlayer >= minDistanceFromPlayer && validSector && clearOfActiveNodes) {
         return position;
       }
@@ -862,7 +1050,7 @@ export class GameScene extends Phaser.Scene {
       for (let attempt = 0; attempt < 10; attempt += 1) {
         const edge = Phaser.Math.Between(0, 3);
         const position = this.getSpawnPositionByEdge(edge);
-        const clearOfActiveNodes = !this.isPositionNearActiveObjectiveNode(position, ENEMY_NODE_SPAWN_CLEARANCE_PX);
+        const clearOfActiveNodes = !this.isPositionNearActiveObjectiveNode(position, nodeSpawnClearance);
         if (this.isPositionInForwardSector(position) && clearOfActiveNodes) {
           return position;
         }
@@ -872,7 +1060,7 @@ export class GameScene extends Phaser.Scene {
     for (let attempt = 0; attempt < 12; attempt += 1) {
       const fallbackEdge = Phaser.Math.Between(0, 3);
       const fallbackPosition = this.getSpawnPositionByEdge(fallbackEdge);
-      if (!this.isPositionNearActiveObjectiveNode(fallbackPosition, ENEMY_NODE_SPAWN_CLEARANCE_PX * 0.75)) {
+      if (!this.isPositionNearActiveObjectiveNode(fallbackPosition, nodeSpawnClearance * 0.75)) {
         return fallbackPosition;
       }
     }
@@ -958,7 +1146,7 @@ export class GameScene extends Phaser.Scene {
     );
 
     pickup.setData('type', pickupType);
-    this.time.delayedCall(9000, () => {
+    this.time.delayedCall(this.getPickupLifetimeMs(), () => {
       if (pickup.active) {
         pickup.disableBody(true, true);
       }
@@ -1036,7 +1224,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const nodeHealth = (node.getData('health') ?? OBJECTIVE_NODE_HEALTH) - projectile.damage;
+    const nodeHealth = (node.getData('health') ?? this.getObjectiveNodeHealth()) - projectile.damage;
     node.setData('health', nodeHealth);
     this.showFloatingPickupText(`NODE -${Math.ceil(projectile.damage)}`, '#cfc5ff', node.x, node.y - 18);
 
@@ -1060,6 +1248,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   onPlayerHitEnemy(player, enemy) {
+    const contactDamageLockUntil = this.registry.get('contactDamageLockUntil') ?? 0;
+    if (this.time.now < contactDamageLockUntil) {
+      return;
+    }
+
     if (this.isPlayerOverlappingAnyPickup()) {
       return;
     }
@@ -1103,7 +1296,9 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    const knockback = new Phaser.Math.Vector2(player.x - enemy.x, player.y - enemy.y).normalize().scale(180);
+    const knockback = new Phaser.Math.Vector2(player.x - enemy.x, player.y - enemy.y).normalize().scale(285);
+    this.playerRecoilUntil = this.time.now + PLAYER_RECOIL_DURATION_MS;
+    this.playerRecoilVelocity.copy(knockback);
     this.player.setVelocity(knockback.x, knockback.y);
     enemy.setVelocity(-knockback.x * 0.35, -knockback.y * 0.35);
   }
@@ -1252,11 +1447,38 @@ export class GameScene extends Phaser.Scene {
   updateHud() {
     const weapon = this.getCurrentWeapon();
     const ammoLabel = this.getWeaponAmmoLabel(weapon.id);
-
-    this.hud.resources.setText([
+    const nodesRemaining = this.getActiveObjectiveNodeCount();
+    const aliensRemaining = this.enemies.countActive(true);
+    const nodesComplete = nodesRemaining === 0;
+    const aliensComplete = nodesComplete && aliensRemaining === 0;
+    const extractionReady = aliensComplete;
+    const hudLines = [
       `Sector: ${this.sectorIndex}`,
       `HP: ${Math.ceil(this.resources.health)}`,
       `${ammoLabel}: ${this.getWeaponAmmoValue(weapon.id)}`
+    ];
+
+    if (this.gameplayTuningDebugEnabled) {
+      const activeNodes = this.getActiveObjectiveNodeCount();
+      const aliveEnemies = this.enemies.countActive(true);
+      const maxEnemies = this.getMaxActiveEnemies(activeNodes);
+      const nextPickupInMs = Math.max(0, this.nextResourceSpawnAt - this.time.now);
+
+      hudLines.push(
+        `DBG Nodes ${activeNodes}/${this.objective.required} HP:${this.getObjectiveNodeHealth()}`,
+        `DBG Enemies ${aliveEnemies}/${maxEnemies} Wave:${this.waveLevel.toFixed(2)}`,
+        `DBG Clearance ${this.getEnemyNodeSpawnClearancePx()} Pickup ${Math.ceil(nextPickupInMs / 1000)}s/${Math.ceil(this.getPickupLifetimeMs() / 1000)}s`,
+        'DBG QA: S1-3 pass | corridor jams | rapid pause/restart | pickup grace | sector loop'
+      );
+    }
+
+    this.hud.resources.setText(hudLines);
+    this.hud.objectives.setColor('#ddf8d4');
+    this.hud.objectives.setText([
+      'Objectives',
+      `${nodesComplete ? '[x]' : '[ ]'} Disable infestation nodes (${nodesRemaining} left)`,
+      `${aliensComplete ? '[x]' : '[ ]'} Eliminate hostiles (${aliensRemaining} left)`,
+      `${extractionReady ? '[x]' : '[ ]'} Reach extraction zone`
     ]);
   }
 
@@ -1284,11 +1506,31 @@ export class GameScene extends Phaser.Scene {
     this.objective.text = `Sector ${this.sectorIndex}: destroy infestation nodes to stop enemy waves`;
   }
 
-  endRun(message) {
+  onResumeFromPause() {
+    const graceUntil = this.time.now + RESUME_CONTACT_GRACE_MS;
+    this.pickupContactGraceUntil = Math.max(this.pickupContactGraceUntil, graceUntil);
+    this.lastPlayerHitAt = this.time.now;
+    this.registry.set('contactDamageLockUntil', graceUntil);
+  }
+
+  endRun() {
+    if (this.hasQueuedGameOverTransition) {
+      return;
+    }
+
+    this.hasQueuedGameOverTransition = true;
     this.state = 'ended';
     this.enemies.clear(true, true);
     this.projectiles.clear(true, true);
+    this.pickups.clear(true, true);
     this.player.setVelocity(0, 0);
-    this.hud.resources.setText([message]);
+
+    this.time.delayedCall(GAME_OVER_DELAY_MS, () => {
+      if (!this.scene.isActive('GameScene')) {
+        return;
+      }
+
+      this.scene.start('GameOverScene');
+    });
   }
 }

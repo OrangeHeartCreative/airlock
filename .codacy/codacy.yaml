@@ -1,3 +1,4 @@
 tools:
-    - lizard@1.17.31
-   - pmd@7.11.0
+    - eslint@8.57.0
+   - dartanalyzer@3.7.2
+    - semgrep@1.78.0

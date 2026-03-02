@@ -3,6 +3,12 @@ import { GameScene } from './scenes/GameScene.js';
 import { StartScene } from './scenes/StartScene.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { SectorCompleteScene } from './scenes/SectorCompleteScene.js';
+import { GameOverScene } from './scenes/GameOverScene.js';
+import { isDebugFlagEnabled } from './config/debug.js';
+
+function isDebugOverlayEnabled() {
+  return isDebugFlagEnabled('debug');
+}
 
 function createDebugOverlay() {
   const overlay = document.createElement('div');
@@ -48,8 +54,11 @@ function createDebugOverlay() {
   return { pushLine };
 }
 
-const debug = createDebugOverlay();
-debug.pushLine('[boot] creating Phaser game');
+const debugEnabled = isDebugOverlayEnabled();
+const debug = debugEnabled ? createDebugOverlay() : null;
+if (debugEnabled) {
+  debug.pushLine('[boot] creating Phaser game');
+}
 
 const config = {
   type: Phaser.CANVAS,
@@ -67,7 +76,7 @@ const config = {
       debug: false
     }
   },
-  scene: [StartScene, GameScene, PauseScene, SectorCompleteScene],
+  scene: [StartScene, GameScene, PauseScene, SectorCompleteScene, GameOverScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
@@ -75,5 +84,7 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
-debug.pushLine(`[boot] renderer=${game.config.renderType === Phaser.CANVAS ? 'canvas' : 'webgl'}`);
-debug.pushLine('[boot] scenes registered: StartScene, GameScene, PauseScene, SectorCompleteScene');
+if (debugEnabled) {
+  debug.pushLine(`[boot] renderer=${game.config.renderType === Phaser.CANVAS ? 'canvas' : 'webgl'}`);
+  debug.pushLine('[boot] scenes registered: StartScene, GameScene, PauseScene, SectorCompleteScene, GameOverScene');
+}

@@ -13,6 +13,8 @@ import {
   setCustomKeyboardBinding
 } from '../config/controls.js';
 
+const MENU_STICK_DEADZONE = 0.5;
+
 export class StartScene extends Phaser.Scene {
   constructor() {
     super('StartScene');
@@ -185,23 +187,25 @@ export class StartScene extends Phaser.Scene {
   }
 
   isGamepadUpPressed() {
-    return this.isGamepadButtonPressed(12);
+    return this.getGamepadAxisValue(1) >= MENU_STICK_DEADZONE;
   }
 
   isGamepadDownPressed() {
-    return this.isGamepadButtonPressed(13);
+    return this.getGamepadAxisValue(1) <= -MENU_STICK_DEADZONE;
   }
 
   isGamepadLeftPressed() {
-    return this.isGamepadButtonPressed(14);
+    return this.getGamepadAxisValue(0) <= -MENU_STICK_DEADZONE;
   }
 
   isGamepadRightPressed() {
-    return this.isGamepadButtonPressed(15);
+    return this.getGamepadAxisValue(0) >= MENU_STICK_DEADZONE;
   }
 
   isGamepadConfirmPressed() {
-    return this.isGamepadButtonPressed(0);
+    const controls = getControlConfig(this.registry);
+    const interactButton = controls?.gamepad?.interactButton ?? 0;
+    return this.isGamepadButtonPressed(interactButton);
   }
 
   isGamepadBackPressed() {
@@ -221,12 +225,32 @@ export class StartScene extends Phaser.Scene {
     return !!browserPad.buttons[buttonIndex].pressed;
   }
 
+  getGamepadAxisValue(axisIndex) {
+    if (this.pad && this.pad.axes.length > axisIndex) {
+      const axis = this.pad.axes[axisIndex];
+      if (typeof axis === 'number') {
+        return axis;
+      }
+      if (axis && typeof axis.getValue === 'function') {
+        return axis.getValue();
+      }
+    }
+
+    const browserPad = this.getBrowserConnectedGamepad();
+    if (!browserPad || !browserPad.axes || browserPad.axes.length <= axisIndex) {
+      return 0;
+    }
+
+    return Number(browserPad.axes[axisIndex]) || 0;
+  }
+
   getBrowserConnectedGamepad() {
-    if (typeof navigator === 'undefined' || !navigator.getGamepads) {
+    const browserNavigator = typeof globalThis !== 'undefined' ? globalThis.navigator : undefined;
+    if (!browserNavigator || !browserNavigator.getGamepads) {
       return null;
     }
 
-    const pads = navigator.getGamepads();
+    const pads = browserNavigator.getGamepads();
     for (let index = 0; index < pads.length; index += 1) {
       if (pads[index]) {
         return pads[index];
@@ -530,6 +554,7 @@ export class StartScene extends Phaser.Scene {
       ? `Gamepad: Connected${connectedGamepadName ? ` (${connectedGamepadName})` : ''}`
       : 'Gamepad: Not Connected';
     this.gamepadStatusText.setText(gamepadStatus);
+    this.gamepadStatusText.setVisible(this.menuMode === 'main');
 
     this.menuTexts.forEach((menuText) => menuText.setVisible(false));
 
@@ -563,7 +588,7 @@ export class StartScene extends Phaser.Scene {
         this.menuTexts[index].setColor(selected ? '#ffb8d6' : '#e7f2eb');
       });
 
-      this.helpText.setText('←/→ Adjust  •  Enter/A Confirm  •  Esc/B Back');
+      this.helpText.setText('');
       return;
     }
 
@@ -594,7 +619,7 @@ export class StartScene extends Phaser.Scene {
       return;
     }
 
-    this.helpText.setText('Enter/A Bind  •  ↑/↓ Navigate  •  Esc/B Back/Cancel');
+    this.helpText.setText('Enter/A/Start Bind  •  Left Stick ↑/↓ Navigate  •  Esc/B Back/Cancel');
   }
 
   startGame() {
