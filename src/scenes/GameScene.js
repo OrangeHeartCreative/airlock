@@ -4,10 +4,14 @@ import { DEBUG_TOOLS_ENABLED, isDebugFlagEnabled } from '../config/debug.js';
 
 const WORLD_WIDTH = 2200;
 const WORLD_HEIGHT = 1400;
+
+// Core player/resource caps.
 const MAX_OXYGEN = 100;
 const MAX_CONTAMINATION = 100;
 const MAX_UV_HEAT = 100;
 const DEFAULT_EQUIPPED_WEAPON_ID = 'shivPistol';
+
+// Input and combat pacing.
 const GAMEPAD_AXIS_MULTIPLIER_X = 1;
 const GAMEPAD_AXIS_MULTIPLIER_Y = -1;
 const START_SPAWN_GRACE_MS = 6000;
@@ -25,12 +29,16 @@ const PICKUP_CONTACT_GRACE_MS = 320;
 const PICKUP_OVERLAP_PROTECTION_RADIUS_PX = 24;
 const PICKUP_WALL_PADDING_PX = 20;
 const PICKUP_SAFE_ROOM_PADDING_PX = 36;
+
+// Objective node and enemy pressure scaling.
 const OBJECTIVE_NODE_BASE_HEALTH = 130;
 const OBJECTIVE_NODE_HEALTH_PER_SECTOR = 12;
 const OBJECTIVE_NODE_MAX_HEALTH = 190;
 const ENEMY_NODE_SPAWN_CLEARANCE_PX = 165;
 const ENEMY_NODE_SPAWN_CLEARANCE_BONUS_PER_SECTOR = 8;
 const ENEMY_NODE_SPAWN_CLEARANCE_MAX_PX = 210;
+
+// Pickup and progression timing.
 const PICKUP_BASE_LIFETIME_MS = 9000;
 const PICKUP_LIFETIME_BONUS_PER_SECTOR_MS = 700;
 const PICKUP_MAX_LIFETIME_MS = 13000;
@@ -47,7 +55,6 @@ const STARTING_RESOURCES = {
   uvHeat: 0,
   oxygen: MAX_OXYGEN,
   contamination: 0,
-  keys: 0,
   health: 100
 };
 
@@ -66,7 +73,6 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = null;
     this.enemies = null;
     this.pickups = null;
-    this.boss = null;
     this.facingDirection = new Phaser.Math.Vector2(1, 0);
     this.nextFireAt = 0;
     this.nextEnemySpawnAt = 0;
@@ -75,7 +81,6 @@ export class GameScene extends Phaser.Scene {
     this.spawnedEnemyCount = 0;
     this.equippedWeaponId = DEFAULT_EQUIPPED_WEAPON_ID;
     this.uvOverheatUntil = 0;
-    this.bossSuppressedUntil = 0;
     this.lastPlayerHitAt = 0;
     this.pickupContactGraceUntil = 0;
     this.playerRecoilUntil = 0;
@@ -155,7 +160,6 @@ export class GameScene extends Phaser.Scene {
     this.spawnedEnemyCount = 0;
     this.equippedWeaponId = typeof carriedWeaponId === 'string' ? carriedWeaponId : DEFAULT_EQUIPPED_WEAPON_ID;
     this.uvOverheatUntil = 0;
-    this.bossSuppressedUntil = 0;
     this.lastPlayerHitAt = 0;
     this.pickupContactGraceUntil = 0;
     this.playerRecoilUntil = 0;
@@ -238,8 +242,6 @@ export class GameScene extends Phaser.Scene {
     graphics.clear();
     graphics.fillStyle(0xff5b8f, 1);
     graphics.fillCircle(24, 24, 24);
-    graphics.generateTexture('boss', 48, 48);
-
     graphics.destroy();
   }
 
@@ -1282,8 +1284,7 @@ export class GameScene extends Phaser.Scene {
     const damageByType = {
       spore: 8,
       stalker: 10,
-      brute: 14,
-      boss: 18
+      brute: 14
     };
     const damage = damageByType[enemyType] ?? 10;
     this.resources.health = Phaser.Math.Clamp(this.resources.health - damage, 0, 100);

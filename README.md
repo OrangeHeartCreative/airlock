@@ -2,6 +2,12 @@
 
 Top-down survival shooter prototype built with Phaser 3 + Vite.
 
+## Milestone Tracking
+
+- Next-session handoff checklist: `docs/todo-next-session.md`
+- Next milestone plan: `docs/milestone-next.md`
+- Next milestone schedule: `docs/milestone-next-schedule.md`
+
 ## Current MVP Scope
 
 - Start menu with settings/remapping flow
