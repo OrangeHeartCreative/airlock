@@ -84,7 +84,7 @@ Session 4 progress notes (2026-03-02):
 
 - Stability worksheet prepared in `docs/session-4-stability-regression.md`.
 - Hybrid approach confirmed: build/quality/logging can be automated, but rapid interaction and gamepad edge-case validation remain manual.
-- Dev instrumentation added: `?qaSession4=1` plus `F9` summary dump/copy for faster regression logging.
+- Dev instrumentation added: `?qaSession5=1` plus `F9` summary dump/copy for faster regression logging.
 - Session 4 result: PASS (no blocking regressions in pause/restart/transition stress checks).
 
 ### Session 5 — Stability Regression B (60-90 min)
@@ -102,7 +102,7 @@ Session 5 progress notes (2026-03-02):
 
 - Stability worksheet prepared in `docs/session-5-stability-regression.md`.
 - Existing QA instrumentation expanded to include death/game-over/restart and StartScene selector-rule signals.
-- Use `?qaSession4=1` + `F9` summary to capture run evidence quickly during manual checks.
+- Use `?qaSession5=1` + `F9` summary to capture run evidence quickly during manual checks.
 - Session 5 result: PASS (death/restart and menu stability checks clear).
 
 ### Session 6 — Packaging + Performance Follow-up (60-90 min)
@@ -146,11 +146,15 @@ Session 7 progress notes (2026-03-02):
 
 ## Suggested Calendar Mapping
 
-- [ ] Day 1: Sessions 1-2
-- [ ] Day 2: Session 3
-- [ ] Day 3: Session 4
-- [ ] Day 4: Session 5
-- [ ] Day 5: Sessions 6-7
+- Planned (original):
+	- [ ] Day 1: Sessions 1-2
+	- [ ] Day 2: Session 3
+	- [ ] Day 3: Session 4
+	- [ ] Day 4: Session 5
+	- [ ] Day 5: Sessions 6-7
+
+- Actual execution (retrospective):
+	- [x] Sessions 1-7 were executed on 2026-03-02 in a condensed single-day validation window due to focused availability and no blocker regressions during the run.
 
 ## Risk Buffer
 

@@ -19,7 +19,7 @@ Manual input required:
 
 ## Dev Instrumentation Mode
 
-- Enable by opening the game with URL flag: `?qaSession4=1`
+- Enable by opening the game with URL flag: `?qaSession5=1`
 - While in gameplay, press `F9` to emit the current Session 4 QA summary
 - Summary is logged to browser console and copied to clipboard when browser permissions allow
 - Paste that summary into this worksheet notes or issue section to avoid manual checkbox transfer

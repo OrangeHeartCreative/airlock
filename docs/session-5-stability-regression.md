@@ -5,7 +5,7 @@ Scope: Death flow consistency, StartScene selector rules, and pause-menu gamepad
 
 ## Instrumentation Mode
 
-- Launch with URL flag: `?qaSession4=1`
+- Launch with URL flag: `?qaSession5=1`
 - Press `F9` during gameplay to output/copy QA summary
 - Use summary counters/events as evidence for this worksheet
 
