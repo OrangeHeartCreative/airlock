@@ -29,6 +29,11 @@ const PICKUP_CONTACT_GRACE_MS = 320;
 const PICKUP_OVERLAP_PROTECTION_RADIUS_PX = 24;
 const PICKUP_WALL_PADDING_PX = 20;
 const PICKUP_SAFE_ROOM_PADDING_PX = 36;
+const NODE_OVERLAP_HINT_ENABLED = true;
+const NODE_OVERLAP_HINT_SCAN_INTERVAL_MS = 220;
+const NODE_OVERLAP_HINT_NODE_RADIUS_PX = 190;
+const NODE_OVERLAP_HINT_PICKUP_RADIUS_PX = 120;
+const NODE_OVERLAP_HINT_COOLDOWN_MS = 4200;
 
 // Objective node and enemy pressure scaling.
 const OBJECTIVE_NODE_BASE_HEALTH = 130;
@@ -102,6 +107,8 @@ export class GameScene extends Phaser.Scene {
     this.controls = null;
     this.gameplayTuningDebugEnabled = false;
     this.hasQueuedGameOverTransition = false;
+    this.nextNodeOverlapHintAt = 0;
+    this.nextNodeOverlapHintCheckAt = 0;
   }
 
   create(data = {}) {
@@ -142,6 +149,8 @@ export class GameScene extends Phaser.Scene {
     this.nextEnemySpawnAt = this.time.now + START_SPAWN_GRACE_MS;
     this.nextResourceSpawnAt = this.time.now + 1200;
     this.gameplayTuningDebugEnabled = this.resolveGameplayTuningDebugEnabled();
+    this.nextNodeOverlapHintAt = this.time.now + 1200;
+    this.nextNodeOverlapHintCheckAt = this.time.now;
 
     if (this.registry.get(PAUSE_BUTTON_ARMED_KEY) === undefined) {
       this.registry.set(PAUSE_BUTTON_ARMED_KEY, true);
@@ -622,6 +631,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.isPauseRequested()) {
+      if (this.scene.isActive('PauseScene')) {
+        return;
+      }
       this.scene.launch('PauseScene');
       this.scene.pause();
       return;
@@ -633,6 +645,7 @@ export class GameScene extends Phaser.Scene {
     this.updateSurvival(dt);
     this.updateEnemies(time);
     this.updateObjectiveState();
+    this.updateNodeOverlapHint(time);
     this.updateHud();
   }
 
@@ -1371,6 +1384,78 @@ export class GameScene extends Phaser.Scene {
 
       const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, pickup.x, pickup.y);
       if (distance <= PICKUP_OVERLAP_PROTECTION_RADIUS_PX) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  updateNodeOverlapHint(time) {
+    if (!NODE_OVERLAP_HINT_ENABLED) {
+      return;
+    }
+
+    if (this.objective.stage !== 'destroyNodes') {
+      return;
+    }
+
+    if (time < this.nextNodeOverlapHintCheckAt) {
+      return;
+    }
+    this.nextNodeOverlapHintCheckAt = time + NODE_OVERLAP_HINT_SCAN_INTERVAL_MS;
+
+    if (time < this.nextNodeOverlapHintAt) {
+      return;
+    }
+
+    const nearbyNode = this.getNearestActiveObjectiveNode(this.player.x, this.player.y, NODE_OVERLAP_HINT_NODE_RADIUS_PX);
+    if (!nearbyNode) {
+      return;
+    }
+
+    const hasNearbyPickup = this.hasActivePickupNearPoint(nearbyNode.x, nearbyNode.y, NODE_OVERLAP_HINT_PICKUP_RADIUS_PX);
+    if (!hasNearbyPickup) {
+      return;
+    }
+
+    this.showFloatingPickupText('OBJECTIVE NODE: PURPLE CORE', '#d8ccff', nearbyNode.x, nearbyNode.y - 30);
+    this.nextNodeOverlapHintAt = time + NODE_OVERLAP_HINT_COOLDOWN_MS;
+  }
+
+  getNearestActiveObjectiveNode(sourceX, sourceY, maxDistance) {
+    const nodes = this.objectiveNodes?.getChildren() || [];
+    let nearestNode = null;
+    let nearestDistance = maxDistance;
+
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index];
+      if (!node.active || !node.getData('active')) {
+        continue;
+      }
+
+      const distance = Phaser.Math.Distance.Between(sourceX, sourceY, node.x, node.y);
+      if (distance > nearestDistance) {
+        continue;
+      }
+
+      nearestDistance = distance;
+      nearestNode = node;
+    }
+
+    return nearestNode;
+  }
+
+  hasActivePickupNearPoint(sourceX, sourceY, radius) {
+    const pickups = this.pickups?.getChildren() || [];
+    for (let index = 0; index < pickups.length; index += 1) {
+      const pickup = pickups[index];
+      if (!pickup.active) {
+        continue;
+      }
+
+      const distance = Phaser.Math.Distance.Between(sourceX, sourceY, pickup.x, pickup.y);
+      if (distance <= radius) {
         return true;
       }
     }

@@ -85,32 +85,38 @@ export class PauseScene extends Phaser.Scene {
 
   update() {
     const currentStickDirections = this.getCurrentStickDirections();
+    const gamepadPausePressed = this.isGamepadPauseJustPressed();
+    const stickUpPressed = this.isStickDirectionJustPressed('up', currentStickDirections);
+    const stickDownPressed = this.isStickDirectionJustPressed('down', currentStickDirections);
+    const stickLeftPressed = this.isStickDirectionJustPressed('left', currentStickDirections);
+    const stickRightPressed = this.isStickDirectionJustPressed('right', currentStickDirections);
+    const gamepadConfirmPressed = this.isGamepadConfirmJustPressed();
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.resume) || this.isGamepadPauseJustPressed()) {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.resume) || gamepadPausePressed) {
       this.previousStickDirections = currentStickDirections;
       this.resumeGame();
       return;
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.up) || this.isStickDirectionJustPressed('up', currentStickDirections)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.up) || stickUpPressed) {
       this.selectedOption = Phaser.Math.Wrap(this.selectedOption - 1, 0, this.options.length);
       this.refreshMenu();
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.down) || this.isStickDirectionJustPressed('down', currentStickDirections)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.down) || stickDownPressed) {
       this.selectedOption = Phaser.Math.Wrap(this.selectedOption + 1, 0, this.options.length);
       this.refreshMenu();
     }
 
-    if (this.selectedOption === 2 && (Phaser.Input.Keyboard.JustDown(this.keys.left) || this.isStickDirectionJustPressed('left', currentStickDirections))) {
+    if (this.selectedOption === 2 && (Phaser.Input.Keyboard.JustDown(this.keys.left) || stickLeftPressed)) {
       this.adjustVolume(-0.1);
     }
 
-    if (this.selectedOption === 2 && (Phaser.Input.Keyboard.JustDown(this.keys.right) || this.isStickDirectionJustPressed('right', currentStickDirections))) {
+    if (this.selectedOption === 2 && (Phaser.Input.Keyboard.JustDown(this.keys.right) || stickRightPressed)) {
       this.adjustVolume(0.1);
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.confirm) || this.isGamepadConfirmJustPressed()) {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.confirm) || gamepadConfirmPressed) {
       this.confirmSelection();
     }
 

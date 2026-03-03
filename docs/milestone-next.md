@@ -1,5 +1,12 @@
 # Next Milestone Plan
 
+## Milestone Status
+
+- Status: Closed (2026-03-02)
+- Outcome: Scope delivered without expansion; all planned sessions complete.
+- Summary: See `docs/milestone-next-summary.md`.
+- Handoff: See `docs/milestone-next-handoff.md`.
+
 ## Milestone Goal
 
 Ship a polished, testable post-MVP build that improves gameplay readability and technical reliability without expanding feature scope.
