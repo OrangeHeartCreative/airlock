@@ -1,15 +1,6 @@
 export const CONTROL_PRESETS = {
   default: {
-    label: 'Default (WASD + RT/RB)',
-    keyboard: {
-      up: 'W',
-      down: 'S',
-      left: 'A',
-      right: 'D',
-      fire: 'SPACE',
-      interact: 'E',
-      pause: 'ESC'
-    },
+    label: 'Default (RT/RB + A)',
     gamepad: {
       firePrimaryButton: 7,
       fireSecondaryButton: 5,
@@ -18,16 +9,7 @@ export const CONTROL_PRESETS = {
     }
   },
   tactical: {
-    label: 'Tactical (IJKL + LT/LB)',
-    keyboard: {
-      up: 'I',
-      down: 'K',
-      left: 'J',
-      right: 'L',
-      fire: 'U',
-      interact: 'O',
-      pause: 'ESC'
-    },
+    label: 'Tactical (LT/LB + Y)',
     gamepad: {
       firePrimaryButton: 6,
       fireSecondaryButton: 4,
@@ -36,16 +18,6 @@ export const CONTROL_PRESETS = {
     }
   }
 };
-
-export const KEYBOARD_ACTIONS = [
-  { value: 'up', label: 'Move Up' },
-  { value: 'down', label: 'Move Down' },
-  { value: 'left', label: 'Move Left' },
-  { value: 'right', label: 'Move Right' },
-  { value: 'fire', label: 'Fire' },
-  { value: 'interact', label: 'Interact' },
-  { value: 'pause', label: 'Pause' }
-];
 
 export const GAMEPAD_ACTIONS = [
   { value: 'firePrimaryButton', label: 'Fire Primary Button' },
@@ -62,7 +34,6 @@ export function getControlPresetName(registry) {
 export function getControlConfig(registry) {
   const presetName = getControlPresetName(registry);
   const preset = CONTROL_PRESETS[presetName];
-  const customKeyboardBinds = registry.get('customKeyboardBinds') ?? {};
   const customGamepadBinds = registry.get('customGamepadBinds') ?? {};
 
   const gamepadConfig = {
@@ -72,10 +43,6 @@ export function getControlConfig(registry) {
 
   return {
     label: preset.label,
-    keyboard: {
-      ...preset.keyboard,
-      ...customKeyboardBinds
-    },
     gamepad: {
       ...gamepadConfig,
       fireButtons: [gamepadConfig.firePrimaryButton, gamepadConfig.fireSecondaryButton]
@@ -90,14 +57,6 @@ export function getControlPresetOptions() {
   }));
 }
 
-export function setCustomKeyboardBinding(registry, action, keyName) {
-  const currentBindings = registry.get('customKeyboardBinds') ?? {};
-  registry.set('customKeyboardBinds', {
-    ...currentBindings,
-    [action]: keyName
-  });
-}
-
 export function setCustomGamepadBinding(registry, action, buttonIndex) {
   const currentBindings = registry.get('customGamepadBinds') ?? {};
   registry.set('customGamepadBinds', {
@@ -107,12 +66,7 @@ export function setCustomGamepadBinding(registry, action, buttonIndex) {
 }
 
 export function clearCustomBindings(registry) {
-  registry.set('customKeyboardBinds', {});
   registry.set('customGamepadBinds', {});
-}
-
-export function clearCustomKeyboardBindings(registry) {
-  registry.set('customKeyboardBinds', {});
 }
 
 export function clearCustomGamepadBindings(registry) {
@@ -120,7 +74,6 @@ export function clearCustomGamepadBindings(registry) {
 }
 
 export function hasCustomBindings(registry) {
-  const keyboardCount = Object.keys(registry.get('customKeyboardBinds') ?? {}).length;
   const gamepadCount = Object.keys(registry.get('customGamepadBinds') ?? {}).length;
-  return keyboardCount > 0 || gamepadCount > 0;
+  return gamepadCount > 0;
 }

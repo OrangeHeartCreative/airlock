@@ -50,6 +50,8 @@ const PICKUP_MAX_LIFETIME_MS = 13000;
 const OBJECTIVE_NODE_WALL_CLEARANCE_PX = 52;
 const OBJECTIVE_NODE_START_CLEARANCE_PX = 200;
 const OBJECTIVE_NODE_MIN_SPACING_PX = 220;
+const OBJECTIVE_NODE_REACHABILITY_CELL_SIZE_PX = 40;
+const OBJECTIVE_NODE_REACHABILITY_WALL_PADDING_PX = 14;
 const RESUME_CONTACT_GRACE_MS = 450;
 const GAME_OVER_DELAY_MS = 2400;
 const GAMEPLAY_TUNING_DEBUG_TOGGLE_KEY = 'gameplayTuningDebugEnabled';
@@ -66,15 +68,385 @@ const STARTING_RESOURCES = {
 const WEAPON_LOADOUT = [
   { id: 'shivPistol', label: 'Shiv Pistol' },
   { id: 'incineratorCarbine', label: 'Incinerator Carbine' },
-  { id: 'uvArcCutter', label: 'UV Arc Cutter' }
+  { id: 'uvArcCutter', label: 'UV Arc Cutter' },
+  { id: 'sporeNeedlegun', label: 'Spore Needlegun' },
+  { id: 'pulseShotgun', label: 'Pulse Shotgun' }
+];
+
+const WEAPON_UNLOCK_BY_SECTOR = [
+  { sector: 1, weaponId: 'shivPistol' },
+  { sector: 3, weaponId: 'incineratorCarbine' },
+  { sector: 5, weaponId: 'uvArcCutter' },
+  { sector: 7, weaponId: 'sporeNeedlegun' },
+  { sector: 9, weaponId: 'pulseShotgun' }
+];
+
+const WEAPON_PICKUP_BASE_CHANCE = 0.14;
+
+const SECTOR_LAYOUT_DEFINITIONS = [
+  {
+    backgroundColor: 0x0b120e,
+    ambientParticleColor: 0x8ced67,
+    wallColor: 0x163124,
+    internalWalls: [
+      [WORLD_WIDTH * 0.36, WORLD_HEIGHT * 0.24, 420, 22],
+      [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.24, 360, 22],
+      [WORLD_WIDTH * 0.26, WORLD_HEIGHT * 0.5, 320, 22],
+      [WORLD_WIDTH * 0.58, WORLD_HEIGHT * 0.5, 300, 22],
+      [WORLD_WIDTH * 0.84, WORLD_HEIGHT * 0.5, 250, 22],
+      [WORLD_WIDTH * 0.34, WORLD_HEIGHT * 0.76, 380, 22],
+      [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.76, 330, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.15, 22, 220],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.47, 22, 200],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.82, 22, 220],
+      [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.66, 22, 220],
+      [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.34, 22, 220]
+    ]
+  },
+  {
+    backgroundColor: 0x0c1119,
+    ambientParticleColor: 0x7fc0ff,
+    wallColor: 0x1f2f4a,
+    internalWalls: [
+      [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.3, 260, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.3, 280, 22],
+      [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.3, 260, 22],
+      [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.68, 260, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.68, 280, 22],
+      [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.68, 260, 22],
+      [WORLD_WIDTH * 0.32, WORLD_HEIGHT * 0.5, 22, 280],
+      [WORLD_WIDTH * 0.68, WORLD_HEIGHT * 0.5, 22, 280],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 220, 22],
+      [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.5, 22, 220],
+      [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.5, 22, 220]
+    ]
+  },
+  {
+    backgroundColor: 0x130d12,
+    ambientParticleColor: 0xff9bc2,
+    wallColor: 0x46213b,
+    internalWalls: [
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.22, 760, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.78, 760, 22],
+      [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.5, 22, 520],
+      [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.5, 22, 520],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 360, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.38, 22, 180],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.62, 22, 180],
+      [WORLD_WIDTH * 0.36, WORLD_HEIGHT * 0.38, 180, 22],
+      [WORLD_WIDTH * 0.64, WORLD_HEIGHT * 0.62, 180, 22],
+      [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.22, 180, 22],
+      [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.78, 180, 22]
+    ]
+  },
+  {
+    backgroundColor: 0x0a1315,
+    ambientParticleColor: 0x84f0ff,
+    wallColor: 0x1d454d,
+    internalWalls: [
+      [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.2, 22, 280],
+      [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.2, 22, 280],
+      [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.8, 22, 280],
+      [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.8, 22, 280],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.18, 420, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.82, 420, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.42, 640, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.58, 640, 22],
+      [WORLD_WIDTH * 0.38, WORLD_HEIGHT * 0.5, 22, 230],
+      [WORLD_WIDTH * 0.62, WORLD_HEIGHT * 0.5, 22, 230]
+    ]
+  },
+  {
+    backgroundColor: 0x10130b,
+    ambientParticleColor: 0xe7ff8e,
+    wallColor: 0x3f4f1f,
+    internalWalls: [
+      [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.34, 240, 22],
+      [WORLD_WIDTH * 0.33, WORLD_HEIGHT * 0.34, 260, 22],
+      [WORLD_WIDTH * 0.52, WORLD_HEIGHT * 0.34, 260, 22],
+      [WORLD_WIDTH * 0.71, WORLD_HEIGHT * 0.34, 260, 22],
+      [WORLD_WIDTH * 0.9, WORLD_HEIGHT * 0.34, 240, 22],
+      [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.66, 240, 22],
+      [WORLD_WIDTH * 0.33, WORLD_HEIGHT * 0.66, 260, 22],
+      [WORLD_WIDTH * 0.52, WORLD_HEIGHT * 0.66, 260, 22],
+      [WORLD_WIDTH * 0.71, WORLD_HEIGHT * 0.66, 260, 22],
+      [WORLD_WIDTH * 0.9, WORLD_HEIGHT * 0.66, 240, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 22, 320]
+    ]
+  },
+  {
+    backgroundColor: 0x151010,
+    ambientParticleColor: 0xffb181,
+    wallColor: 0x5f2e22,
+    internalWalls: [
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.2, 22, 240],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 22, 260],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.8, 22, 240],
+      [WORLD_WIDTH * 0.24, WORLD_HEIGHT * 0.18, 260, 22],
+      [WORLD_WIDTH * 0.76, WORLD_HEIGHT * 0.18, 260, 22],
+      [WORLD_WIDTH * 0.24, WORLD_HEIGHT * 0.5, 300, 22],
+      [WORLD_WIDTH * 0.76, WORLD_HEIGHT * 0.5, 300, 22],
+      [WORLD_WIDTH * 0.24, WORLD_HEIGHT * 0.82, 260, 22],
+      [WORLD_WIDTH * 0.76, WORLD_HEIGHT * 0.82, 260, 22],
+      [WORLD_WIDTH * 0.12, WORLD_HEIGHT * 0.5, 22, 280],
+      [WORLD_WIDTH * 0.88, WORLD_HEIGHT * 0.5, 22, 280]
+    ]
+  },
+  {
+    backgroundColor: 0x0f1018,
+    ambientParticleColor: 0xc0b1ff,
+    wallColor: 0x2e2f5f,
+    internalWalls: [
+      [WORLD_WIDTH * 0.28, WORLD_HEIGHT * 0.22, 22, 240],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.22, 22, 240],
+      [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.22, 22, 240],
+      [WORLD_WIDTH * 0.28, WORLD_HEIGHT * 0.78, 22, 240],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.78, 22, 240],
+      [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.78, 22, 240],
+      [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.5, 240, 22],
+      [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.5, 240, 22],
+      [WORLD_WIDTH * 0.39, WORLD_HEIGHT * 0.5, 220, 22],
+      [WORLD_WIDTH * 0.61, WORLD_HEIGHT * 0.5, 220, 22]
+    ]
+  },
+  {
+    backgroundColor: 0x0c1510,
+    ambientParticleColor: 0x8effb2,
+    wallColor: 0x1f5a36,
+    internalWalls: [
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.28, 680, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.72, 680, 22],
+      [WORLD_WIDTH * 0.3, WORLD_HEIGHT * 0.5, 22, 500],
+      [WORLD_WIDTH * 0.7, WORLD_HEIGHT * 0.5, 22, 500],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 300, 22],
+      [WORLD_WIDTH * 0.18, WORLD_HEIGHT * 0.28, 22, 200],
+      [WORLD_WIDTH * 0.82, WORLD_HEIGHT * 0.72, 22, 200],
+      [WORLD_WIDTH * 0.18, WORLD_HEIGHT * 0.72, 190, 22],
+      [WORLD_WIDTH * 0.82, WORLD_HEIGHT * 0.28, 190, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.14, 190, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.86, 190, 22]
+    ]
+  },
+  {
+    backgroundColor: 0x171009,
+    ambientParticleColor: 0xffd594,
+    wallColor: 0x63452a,
+    internalWalls: [
+      [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.22, 300, 22],
+      [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.22, 300, 22],
+      [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.78, 300, 22],
+      [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.78, 300, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 760, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.34, 500, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.66, 500, 22],
+      [WORLD_WIDTH * 0.38, WORLD_HEIGHT * 0.5, 22, 260],
+      [WORLD_WIDTH * 0.62, WORLD_HEIGHT * 0.5, 22, 260],
+      [WORLD_WIDTH * 0.12, WORLD_HEIGHT * 0.5, 22, 220],
+      [WORLD_WIDTH * 0.88, WORLD_HEIGHT * 0.5, 22, 220]
+    ]
+  },
+  {
+    backgroundColor: 0x10161b,
+    ambientParticleColor: 0x8ed8ff,
+    wallColor: 0x284f66,
+    internalWalls: [
+      [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.18, 22, 240],
+      [WORLD_WIDTH * 0.4, WORLD_HEIGHT * 0.18, 22, 240],
+      [WORLD_WIDTH * 0.6, WORLD_HEIGHT * 0.18, 22, 240],
+      [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.18, 22, 240],
+      [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.82, 22, 240],
+      [WORLD_WIDTH * 0.4, WORLD_HEIGHT * 0.82, 22, 240],
+      [WORLD_WIDTH * 0.6, WORLD_HEIGHT * 0.82, 22, 240],
+      [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.82, 22, 240],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.34, 520, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.66, 520, 22]
+    ]
+  },
+  {
+    backgroundColor: 0x1a0f17,
+    ambientParticleColor: 0xff9fef,
+    wallColor: 0x682f59,
+    internalWalls: [
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.16, 740, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.84, 740, 22],
+      [WORLD_WIDTH * 0.16, WORLD_HEIGHT * 0.5, 22, 540],
+      [WORLD_WIDTH * 0.84, WORLD_HEIGHT * 0.5, 22, 540],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 420, 22],
+      [WORLD_WIDTH * 0.28, WORLD_HEIGHT * 0.34, 22, 220],
+      [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.34, 22, 220],
+      [WORLD_WIDTH * 0.28, WORLD_HEIGHT * 0.66, 22, 220],
+      [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.66, 22, 220],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.34, 220, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.66, 220, 22]
+    ]
+  },
+  {
+    backgroundColor: 0x0d1218,
+    ambientParticleColor: 0x98e5ff,
+    wallColor: 0x2d5a74,
+    internalWalls: [
+      [WORLD_WIDTH * 0.24, WORLD_HEIGHT * 0.22, 240, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.22, 240, 22],
+      [WORLD_WIDTH * 0.76, WORLD_HEIGHT * 0.22, 240, 22],
+      [WORLD_WIDTH * 0.24, WORLD_HEIGHT * 0.78, 240, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.78, 240, 22],
+      [WORLD_WIDTH * 0.76, WORLD_HEIGHT * 0.78, 240, 22],
+      [WORLD_WIDTH * 0.34, WORLD_HEIGHT * 0.5, 22, 440],
+      [WORLD_WIDTH * 0.66, WORLD_HEIGHT * 0.5, 22, 440],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 300, 22],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.36, 22, 140],
+      [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.64, 22, 140]
+    ]
+  }
+];
+
+const SECTOR_NODE_POSITION_SETS = [
+  [
+    [340, 260],
+    [WORLD_WIDTH - 260, 260],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT - 260],
+    [WORLD_WIDTH * 0.18, WORLD_HEIGHT * 0.82],
+    [WORLD_WIDTH * 0.82, WORLD_HEIGHT * 0.82],
+    [WORLD_WIDTH * 0.25, WORLD_HEIGHT * 0.34],
+    [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.62]
+  ],
+  [
+    [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.2],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.2],
+    [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.2],
+    [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.8],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.8],
+    [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.8],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5]
+  ],
+  [
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.16],
+    [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.28],
+    [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.28],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.72],
+    [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.72],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.86]
+  ],
+  [
+    [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.14],
+    [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.14],
+    [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.86],
+    [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.86],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5]
+  ],
+  [
+    [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.22],
+    [WORLD_WIDTH * 0.36, WORLD_HEIGHT * 0.22],
+    [WORLD_WIDTH * 0.64, WORLD_HEIGHT * 0.22],
+    [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.22],
+    [WORLD_WIDTH * 0.24, WORLD_HEIGHT * 0.78],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.78],
+    [WORLD_WIDTH * 0.76, WORLD_HEIGHT * 0.78]
+  ],
+  [
+    [WORLD_WIDTH * 0.16, WORLD_HEIGHT * 0.16],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.16],
+    [WORLD_WIDTH * 0.84, WORLD_HEIGHT * 0.16],
+    [WORLD_WIDTH * 0.16, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.84, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.16, WORLD_HEIGHT * 0.84],
+    [WORLD_WIDTH * 0.84, WORLD_HEIGHT * 0.84]
+  ],
+  [
+    [WORLD_WIDTH * 0.28, WORLD_HEIGHT * 0.14],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.14],
+    [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.14],
+    [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.28, WORLD_HEIGHT * 0.86],
+    [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.86]
+  ],
+  [
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.12],
+    [WORLD_WIDTH * 0.18, WORLD_HEIGHT * 0.3],
+    [WORLD_WIDTH * 0.82, WORLD_HEIGHT * 0.3],
+    [WORLD_WIDTH * 0.32, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.68, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.18, WORLD_HEIGHT * 0.7],
+    [WORLD_WIDTH * 0.82, WORLD_HEIGHT * 0.7]
+  ],
+  [
+    [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.22],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.22],
+    [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.22],
+    [WORLD_WIDTH * 0.34, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.66, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.78],
+    [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.78]
+  ],
+  [
+    [WORLD_WIDTH * 0.12, WORLD_HEIGHT * 0.24],
+    [WORLD_WIDTH * 0.38, WORLD_HEIGHT * 0.24],
+    [WORLD_WIDTH * 0.62, WORLD_HEIGHT * 0.24],
+    [WORLD_WIDTH * 0.88, WORLD_HEIGHT * 0.24],
+    [WORLD_WIDTH * 0.24, WORLD_HEIGHT * 0.76],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.76],
+    [WORLD_WIDTH * 0.76, WORLD_HEIGHT * 0.76]
+  ],
+  [
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.1],
+    [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.3],
+    [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.3],
+    [WORLD_WIDTH * 0.34, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.66, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.7],
+    [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.7]
+  ],
+  [
+    [WORLD_WIDTH * 0.24, WORLD_HEIGHT * 0.16],
+    [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.16],
+    [WORLD_WIDTH * 0.76, WORLD_HEIGHT * 0.16],
+    [WORLD_WIDTH * 0.16, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.84, WORLD_HEIGHT * 0.5],
+    [WORLD_WIDTH * 0.24, WORLD_HEIGHT * 0.84],
+    [WORLD_WIDTH * 0.76, WORLD_HEIGHT * 0.84]
+  ]
+];
+
+const GLOBAL_NODE_FALLBACK_POSITIONS = [
+  [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.2],
+  [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.2],
+  [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.2],
+  [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.5],
+  [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5],
+  [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.5],
+  [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.8],
+  [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.8],
+  [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.8],
+  [WORLD_WIDTH * 0.34, WORLD_HEIGHT * 0.28],
+  [WORLD_WIDTH * 0.66, WORLD_HEIGHT * 0.28],
+  [WORLD_WIDTH * 0.34, WORLD_HEIGHT * 0.72],
+  [WORLD_WIDTH * 0.66, WORLD_HEIGHT * 0.72],
+  [WORLD_WIDTH * 0.12, WORLD_HEIGHT * 0.5],
+  [WORLD_WIDTH * 0.88, WORLD_HEIGHT * 0.5],
+  [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.12],
+  [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.88],
+  [WORLD_WIDTH * 0.12, WORLD_HEIGHT * 0.18],
+  [WORLD_WIDTH * 0.88, WORLD_HEIGHT * 0.18],
+  [WORLD_WIDTH * 0.12, WORLD_HEIGHT * 0.82],
+  [WORLD_WIDTH * 0.88, WORLD_HEIGHT * 0.82],
+  [WORLD_WIDTH * 0.42, WORLD_HEIGHT * 0.36],
+  [WORLD_WIDTH * 0.58, WORLD_HEIGHT * 0.36],
+  [WORLD_WIDTH * 0.42, WORLD_HEIGHT * 0.64],
+  [WORLD_WIDTH * 0.58, WORLD_HEIGHT * 0.64],
+  [WORLD_WIDTH * 0.26, WORLD_HEIGHT * 0.36],
+  [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.36],
+  [WORLD_WIDTH * 0.26, WORLD_HEIGHT * 0.64],
+  [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.64]
 ];
 
 export class GameScene extends Phaser.Scene {
   constructor() {
     super('GameScene');
     this.player = null;
-    this.cursors = null;
-    this.keys = null;
     this.projectiles = null;
     this.enemies = null;
     this.pickups = null;
@@ -109,6 +481,7 @@ export class GameScene extends Phaser.Scene {
     this.hasQueuedGameOverTransition = false;
     this.nextNodeOverlapHintAt = 0;
     this.nextNodeOverlapHintCheckAt = 0;
+    this.reachableNodeGridCache = null;
   }
 
   create(data = {}) {
@@ -135,6 +508,10 @@ export class GameScene extends Phaser.Scene {
     this.buildHud();
     this.configureCollisions();
 
+    if (data?.extractionTest === true) {
+      this.enableExtractionClarityTestMode();
+    }
+
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
@@ -159,6 +536,22 @@ export class GameScene extends Phaser.Scene {
     this.updateObjectiveText();
   }
 
+  enableExtractionClarityTestMode() {
+    this.objectiveNodes.getChildren().forEach((node) => {
+      node.setData('active', false);
+      node.setTint(0x4ff0a8);
+      node.setAlpha(0.55);
+    });
+
+    this.enemies.clear(true, true);
+    this.projectiles.clear(true, true);
+
+    this.objective.progress = this.objective.required;
+    this.objective.nodesRemaining = 0;
+    this.objective.stage = 'extract';
+    this.showFloatingPickupText('Extraction Test Mode', '#d8ccff', this.player.x, this.player.y - 38, 1100);
+  }
+
   resetRunState({ carryResources = false, carriedResources = null, carriedWeaponId = null, carriedWaveLevel = null } = {}) {
     this.facingDirection.set(1, 0);
     this.nextFireAt = 0;
@@ -167,7 +560,7 @@ export class GameScene extends Phaser.Scene {
     const sectorWaveBase = 1 + (this.sectorIndex - 1) * 0.35;
     this.waveLevel = Number.isFinite(carriedWaveLevel) ? carriedWaveLevel : sectorWaveBase;
     this.spawnedEnemyCount = 0;
-    this.equippedWeaponId = typeof carriedWeaponId === 'string' ? carriedWeaponId : DEFAULT_EQUIPPED_WEAPON_ID;
+    this.equippedWeaponId = this.resolveEquippedWeaponId(carriedWeaponId);
     this.uvOverheatUntil = 0;
     this.lastPlayerHitAt = 0;
     this.pickupContactGraceUntil = 0;
@@ -193,6 +586,27 @@ export class GameScene extends Phaser.Scene {
     this.state = 'playing';
     this.hasQueuedSectorTransition = false;
     this.hasQueuedGameOverTransition = false;
+  }
+
+  resolveEquippedWeaponId(carriedWeaponId) {
+    if (!this.isWeaponInLoadout(carriedWeaponId)) {
+      return DEFAULT_EQUIPPED_WEAPON_ID;
+    }
+
+    return carriedWeaponId;
+  }
+
+  getWeaponUnlockSector(weaponId) {
+    const unlockEntry = WEAPON_UNLOCK_BY_SECTOR.find((entry) => entry.weaponId === weaponId);
+    return unlockEntry?.sector ?? 1;
+  }
+
+  isWeaponInLoadout(weaponId) {
+    if (typeof weaponId !== 'string') {
+      return false;
+    }
+
+    return WEAPON_LOADOUT.some((weapon) => weapon.id === weaponId);
   }
 
   buildTextures() {
@@ -249,6 +663,13 @@ export class GameScene extends Phaser.Scene {
     graphics.generateTexture('medkit', 16, 16);
 
     graphics.clear();
+    graphics.fillStyle(0xcab6ff, 1);
+    graphics.fillRoundedRect(0, 0, 18, 18, 5);
+    graphics.fillStyle(0x433273, 1);
+    graphics.fillRect(5, 4, 8, 10);
+    graphics.generateTexture('weaponPickup', 18, 18);
+
+    graphics.clear();
     graphics.fillStyle(0xff5b8f, 1);
     graphics.fillCircle(24, 24, 24);
     graphics.destroy();
@@ -282,70 +703,27 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.existing(wall, true);
       this.walls.add(wall);
     });
+
+    this.reachableNodeGridCache = null;
   }
 
   getSectorLayoutDefinition() {
-    const themeIndex = (this.sectorIndex - 1) % 3;
+    return SECTOR_LAYOUT_DEFINITIONS[this.getSectorTemplateIndex()];
+  }
 
-    const layouts = [
-      {
-        backgroundColor: 0x0b120e,
-        ambientParticleColor: 0x8ced67,
-        wallColor: 0x163124,
-        internalWalls: [
-          [WORLD_WIDTH * 0.36, WORLD_HEIGHT * 0.24, 420, 22],
-          [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.24, 360, 22],
-          [WORLD_WIDTH * 0.26, WORLD_HEIGHT * 0.5, 320, 22],
-          [WORLD_WIDTH * 0.58, WORLD_HEIGHT * 0.5, 300, 22],
-          [WORLD_WIDTH * 0.84, WORLD_HEIGHT * 0.5, 250, 22],
-          [WORLD_WIDTH * 0.34, WORLD_HEIGHT * 0.76, 380, 22],
-          [WORLD_WIDTH * 0.72, WORLD_HEIGHT * 0.76, 330, 22],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.15, 22, 220],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.47, 22, 200],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.82, 22, 220],
-          [WORLD_WIDTH * 0.2, WORLD_HEIGHT * 0.66, 22, 220],
-          [WORLD_WIDTH * 0.8, WORLD_HEIGHT * 0.34, 22, 220]
-        ]
-      },
-      {
-        backgroundColor: 0x0c1119,
-        ambientParticleColor: 0x7fc0ff,
-        wallColor: 0x1f2f4a,
-        internalWalls: [
-          [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.3, 260, 22],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.3, 280, 22],
-          [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.3, 260, 22],
-          [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.68, 260, 22],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.68, 280, 22],
-          [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.68, 260, 22],
-          [WORLD_WIDTH * 0.32, WORLD_HEIGHT * 0.5, 22, 280],
-          [WORLD_WIDTH * 0.68, WORLD_HEIGHT * 0.5, 22, 280],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 220, 22],
-          [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.5, 22, 220],
-          [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.5, 22, 220]
-        ]
-      },
-      {
-        backgroundColor: 0x130d12,
-        ambientParticleColor: 0xff9bc2,
-        wallColor: 0x46213b,
-        internalWalls: [
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.22, 760, 22],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.78, 760, 22],
-          [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.5, 22, 520],
-          [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.5, 22, 520],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, 360, 22],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.38, 22, 180],
-          [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.62, 22, 180],
-          [WORLD_WIDTH * 0.36, WORLD_HEIGHT * 0.38, 180, 22],
-          [WORLD_WIDTH * 0.64, WORLD_HEIGHT * 0.62, 180, 22],
-          [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.22, 180, 22],
-          [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.78, 180, 22]
-        ]
-      }
-    ];
+  getSectorTemplateIndex() {
+    const totalLayouts = SECTOR_LAYOUT_DEFINITIONS.length;
+    return ((Math.max(1, this.sectorIndex) - 1) % totalLayouts + totalLayouts) % totalLayouts;
+  }
 
-    return layouts[themeIndex];
+  getSectorProgressScalar() {
+    const templateIndex = this.getSectorTemplateIndex();
+    const maxIndex = Math.max(1, SECTOR_LAYOUT_DEFINITIONS.length - 1);
+    return templateIndex / maxIndex;
+  }
+
+  getSectorBandIndex() {
+    return Math.floor(this.getSectorTemplateIndex() / 3);
   }
 
   buildPlayer() {
@@ -390,50 +768,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   getPreferredNodePositionsForSector() {
-    const themeIndex = (this.sectorIndex - 1) % 3;
+    const sectorCandidates = SECTOR_NODE_POSITION_SETS[this.getSectorTemplateIndex()] || SECTOR_NODE_POSITION_SETS[0];
+    const fallbackCandidates = this.getRotatedFallbackNodeCandidates();
 
-    if (themeIndex === 1) {
-      return [
-        [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.2],
-        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.2],
-        [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.2],
-        [WORLD_WIDTH * 0.14, WORLD_HEIGHT * 0.8],
-        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.8],
-        [WORLD_WIDTH * 0.86, WORLD_HEIGHT * 0.8],
-        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5]
-      ];
-    }
+    return [...sectorCandidates, ...fallbackCandidates];
+  }
 
-    if (themeIndex === 2) {
-      return [
-        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.16],
-        [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.28],
-        [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.28],
-        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5],
-        [WORLD_WIDTH * 0.22, WORLD_HEIGHT * 0.72],
-        [WORLD_WIDTH * 0.78, WORLD_HEIGHT * 0.72],
-        [WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.86]
-      ];
-    }
-
-    return [
-      [340, 260],
-      [WORLD_WIDTH - 260, 260],
-      [WORLD_WIDTH * 0.5, WORLD_HEIGHT - 260],
-      [WORLD_WIDTH * 0.18, WORLD_HEIGHT * 0.82],
-      [WORLD_WIDTH * 0.82, WORLD_HEIGHT * 0.82],
-      [WORLD_WIDTH * 0.25, WORLD_HEIGHT * 0.34],
-      [WORLD_WIDTH * 0.74, WORLD_HEIGHT * 0.62]
+  getRotatedFallbackNodeCandidates() {
+    const rotation = this.getSectorTemplateIndex() % GLOBAL_NODE_FALLBACK_POSITIONS.length;
+    const ordered = [
+      ...GLOBAL_NODE_FALLBACK_POSITIONS.slice(rotation),
+      ...GLOBAL_NODE_FALLBACK_POSITIONS.slice(0, rotation)
     ];
+    const seen = new Set();
+
+    return ordered.filter(([x, y]) => {
+      const key = `${Math.round(x)}:${Math.round(y)}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
   }
 
   getRequiredNodeCount() {
-    return Phaser.Math.Clamp(3 + Math.floor((this.sectorIndex - 1) / 3), 3, 5);
+    const templateIndex = this.getSectorTemplateIndex();
+    return Phaser.Math.Clamp(3 + Math.floor(templateIndex / 2), 3, 7);
   }
 
   getObjectiveNodeHealth() {
-    const scaledHealth = OBJECTIVE_NODE_BASE_HEALTH + (this.sectorIndex - 1) * OBJECTIVE_NODE_HEALTH_PER_SECTOR;
-    return Phaser.Math.Clamp(scaledHealth, OBJECTIVE_NODE_BASE_HEALTH, OBJECTIVE_NODE_MAX_HEALTH);
+    const templateIndex = this.getSectorTemplateIndex();
+    const scaledHealth = OBJECTIVE_NODE_BASE_HEALTH + templateIndex * OBJECTIVE_NODE_HEALTH_PER_SECTOR;
+    return Phaser.Math.Clamp(scaledHealth, OBJECTIVE_NODE_BASE_HEALTH, OBJECTIVE_NODE_MAX_HEALTH + 72);
   }
 
   getValidObjectiveNodePositions(preferredPositions, requiredCount) {
@@ -457,6 +824,10 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
+      if (!this.isPositionReachableFromStart(x, y)) {
+        return;
+      }
+
       validPositions.push([x, y]);
     });
 
@@ -472,8 +843,9 @@ export class GameScene extends Phaser.Scene {
         validPositions,
         OBJECTIVE_NODE_MIN_SPACING_PX
       );
+      const reachableFromStart = this.isPositionReachableFromStart(randomX, randomY);
 
-      if (!blocked && !closeToStart && !tooCloseToOtherNodes) {
+      if (!blocked && !closeToStart && !tooCloseToOtherNodes && reachableFromStart) {
         validPositions.push([randomX, randomY]);
       }
 
@@ -503,6 +875,84 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  isPositionReachableFromStart(x, y) {
+    if (!this.reachableNodeGridCache) {
+      this.reachableNodeGridCache = this.buildReachableNodeGridCache();
+    }
+
+    const cache = this.reachableNodeGridCache;
+    if (!cache || !cache.reachableCellKeys) {
+      return true;
+    }
+
+    const clampedX = Phaser.Math.Clamp(x, 0, WORLD_WIDTH - 1);
+    const clampedY = Phaser.Math.Clamp(y, 0, WORLD_HEIGHT - 1);
+    const col = Phaser.Math.Clamp(Math.floor(clampedX / cache.cellSize), 0, cache.maxCol);
+    const row = Phaser.Math.Clamp(Math.floor(clampedY / cache.cellSize), 0, cache.maxRow);
+
+    return cache.reachableCellKeys.has(`${col},${row}`);
+  }
+
+  buildReachableNodeGridCache() {
+    const cellSize = OBJECTIVE_NODE_REACHABILITY_CELL_SIZE_PX;
+    const maxCol = Math.floor((WORLD_WIDTH - 1) / cellSize);
+    const maxRow = Math.floor((WORLD_HEIGHT - 1) / cellSize);
+    const blockedCellKeys = new Set();
+
+    for (let col = 0; col <= maxCol; col += 1) {
+      for (let row = 0; row <= maxRow; row += 1) {
+        const sampleX = Phaser.Math.Clamp(col * cellSize + cellSize * 0.5, 0, WORLD_WIDTH - 1);
+        const sampleY = Phaser.Math.Clamp(row * cellSize + cellSize * 0.5, 0, WORLD_HEIGHT - 1);
+
+        if (this.isPositionBlockedByWall(sampleX, sampleY, OBJECTIVE_NODE_REACHABILITY_WALL_PADDING_PX)) {
+          blockedCellKeys.add(`${col},${row}`);
+        }
+      }
+    }
+
+    const startCol = Phaser.Math.Clamp(Math.floor(120 / cellSize), 0, maxCol);
+    const startRow = Phaser.Math.Clamp(Math.floor(120 / cellSize), 0, maxRow);
+    const startKey = `${startCol},${startRow}`;
+
+    if (blockedCellKeys.has(startKey)) {
+      return null;
+    }
+
+    const reachableCellKeys = new Set([startKey]);
+    const queue = [[startCol, startRow]];
+
+    while (queue.length > 0) {
+      const [currentCol, currentRow] = queue.shift();
+      const neighbors = [
+        [currentCol - 1, currentRow],
+        [currentCol + 1, currentRow],
+        [currentCol, currentRow - 1],
+        [currentCol, currentRow + 1]
+      ];
+
+      neighbors.forEach(([nextCol, nextRow]) => {
+        if (nextCol < 0 || nextCol > maxCol || nextRow < 0 || nextRow > maxRow) {
+          return;
+        }
+
+        const neighborKey = `${nextCol},${nextRow}`;
+        if (blockedCellKeys.has(neighborKey) || reachableCellKeys.has(neighborKey)) {
+          return;
+        }
+
+        reachableCellKeys.add(neighborKey);
+        queue.push([nextCol, nextRow]);
+      });
+    }
+
+    return {
+      cellSize,
+      maxCol,
+      maxRow,
+      reachableCellKeys
+    };
+  }
+
   buildSafeRoom() {
     this.safeRoom = this.add.rectangle(WORLD_WIDTH - 170, WORLD_HEIGHT - 170, 120, 120, 0x234f35, 0.35);
     this.physics.add.existing(this.safeRoom, true);
@@ -510,18 +960,6 @@ export class GameScene extends Phaser.Scene {
 
   buildInput() {
     this.controls = getControlConfig(this.registry);
-    this.keys = this.input.keyboard.addKeys(this.controls.keyboard);
-    this.fallbackKeys = this.input.keyboard.addKeys({
-      up: 'UP',
-      down: 'DOWN',
-      left: 'LEFT',
-      right: 'RIGHT',
-      w: 'W',
-      a: 'A',
-      s: 'S',
-      d: 'D',
-      sprint: 'SHIFT'
-    });
     if (this.input.gamepad) {
       this.input.gamepad.once('connected', this.onGamepadConnected, this);
       if (this.input.gamepad.total > 0) {
@@ -537,16 +975,15 @@ export class GameScene extends Phaser.Scene {
   isPauseRequested() {
     const pauseInputLockUntil = this.registry.get('pauseInputLockUntil') ?? 0;
     const pauseButton = this.controls.gamepad.pauseButton;
-    const keyboardPause = Phaser.Input.Keyboard.JustDown(this.keys.pause);
 
     if (this.time.now < pauseInputLockUntil) {
       this.syncGamepadButtonState(pauseButton);
-      return keyboardPause;
+      return false;
     }
 
     const gamepadPause = this.canConsumePauseButtonPress(pauseButton);
 
-    return keyboardPause || gamepadPause;
+    return gamepadPause;
   }
 
   canConsumePauseButtonPress(buttonIndex) {
@@ -677,9 +1114,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const speed = this.isSprintActive() ? 285 : 200;
-    const movementVector = this.getKeyboardMovementVector();
-    this.applyGamepadMovementOverride(movementVector);
+    const speed = 200;
+    const movementVector = this.getGamepadMovementVector();
 
     if (movementVector.lengthSq() > 0) {
       this.facingDirection.copy(movementVector).normalize();
@@ -690,53 +1126,10 @@ export class GameScene extends Phaser.Scene {
     this.player.setVelocity(movementVector.x, movementVector.y);
   }
 
-  isSprintActive() {
-    return this.fallbackKeys.sprint.isDown;
-  }
-
-  getKeyboardMovementVector() {
-    const movementX = this.getDirectionalAxisValue(
-      this.isMovementActionDown('left'),
-      this.isMovementActionDown('right')
-    );
-    const movementY = this.getDirectionalAxisValue(
-      this.isMovementActionDown('up'),
-      this.isMovementActionDown('down')
-    );
-
-    return new Phaser.Math.Vector2(movementX, movementY);
-  }
-
-  isMovementActionDown(action) {
-    const mappedAction = this.keys?.[action];
-    const mappedIsDown = mappedAction ? mappedAction.isDown : false;
-
-    if (action === 'left') {
-      return mappedIsDown || this.fallbackKeys.left.isDown || this.fallbackKeys.a.isDown;
-    }
-    if (action === 'right') {
-      return mappedIsDown || this.fallbackKeys.right.isDown || this.fallbackKeys.d.isDown;
-    }
-    if (action === 'up') {
-      return mappedIsDown || this.fallbackKeys.up.isDown || this.fallbackKeys.w.isDown;
-    }
-
-    return mappedIsDown || this.fallbackKeys.down.isDown || this.fallbackKeys.s.isDown;
-  }
-
-  getDirectionalAxisValue(negativeDirectionPressed, positiveDirectionPressed) {
-    if (negativeDirectionPressed && !positiveDirectionPressed) {
-      return -1;
-    }
-    if (positiveDirectionPressed && !negativeDirectionPressed) {
-      return 1;
-    }
-    return 0;
-  }
-
-  applyGamepadMovementOverride(movementVector) {
+  getGamepadMovementVector() {
     const axisX = this.getPrimaryGamepadAxisValue([0, 2]);
     const axisY = this.getPrimaryGamepadAxisValue([1, 3]);
+    const movementVector = new Phaser.Math.Vector2(0, 0);
 
     if (Math.abs(axisX) > 0.15) {
       movementVector.x = axisX * GAMEPAD_AXIS_MULTIPLIER_X;
@@ -744,6 +1137,8 @@ export class GameScene extends Phaser.Scene {
     if (Math.abs(axisY) > 0.15) {
       movementVector.y = axisY * GAMEPAD_AXIS_MULTIPLIER_Y;
     }
+
+    return movementVector;
   }
 
   getPrimaryGamepadAxisValue(axisCandidates) {
@@ -813,12 +1208,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   isFireInputActive(pointer) {
-    const keyboardFire = this.keys.fire.isDown;
     const mouseFire = pointer.isDown;
     const fireButtons = this.controls.gamepad.fireButtons;
     const gamepadFire = fireButtons.some((buttonIndex) => this.isGamepadButtonPressed(buttonIndex));
 
-    return keyboardFire || mouseFire || gamepadFire;
+    return mouseFire || gamepadFire;
   }
 
   fireCurrentWeapon(time, direction) {
@@ -837,7 +1231,22 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.fireUvArcCutter(time, direction);
+    if (weapon.id === 'uvArcCutter') {
+      this.fireUvArcCutter(time, direction);
+      return;
+    }
+
+    if (weapon.id === 'sporeNeedlegun') {
+      this.fireSporeNeedlegun(time, direction);
+      return;
+    }
+
+    if (weapon.id === 'pulseShotgun') {
+      this.firePulseShotgun(time, direction);
+      return;
+    }
+
+    this.fireShivPistol(time, direction);
   }
 
   fireShivPistol(time, direction) {
@@ -863,8 +1272,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.resources.fuel = Math.max(0, this.resources.fuel - 2);
-    this.nextFireAt = time + 95;
+    this.resources.fuel = Math.max(0, this.resources.fuel - 1);
+    this.nextFireAt = time + 88;
 
     const spread = Phaser.Math.FloatBetween(-0.17, 0.17);
     const incineratorDirection = direction.clone().rotate(spread);
@@ -886,14 +1295,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.resources.uvHeat >= MAX_UV_HEAT) {
-      this.uvOverheatUntil = time + 1200;
+      this.uvOverheatUntil = time + 1000;
       return;
     }
 
-    this.resources.uvHeat = Phaser.Math.Clamp(this.resources.uvHeat + 12, 0, MAX_UV_HEAT);
+    this.resources.uvHeat = Phaser.Math.Clamp(this.resources.uvHeat + 6, 0, MAX_UV_HEAT);
     this.nextFireAt = time + 70;
     if (this.resources.uvHeat >= MAX_UV_HEAT) {
-      this.uvOverheatUntil = time + 1200;
+      this.uvOverheatUntil = time + 1000;
     }
 
     this.spawnProjectile({
@@ -905,6 +1314,83 @@ export class GameScene extends Phaser.Scene {
       tint: 0x8af7ff,
       weaponType: 'uvArcCutter'
     });
+  }
+
+  fireSporeNeedlegun(time, direction) {
+    const profile = this.getSporeNeedlegunProfile();
+    if (time < this.nextFireAt || this.resources.ammo < profile.ammoCost) {
+      return;
+    }
+
+    this.resources.ammo = Math.max(0, this.resources.ammo - profile.ammoCost);
+    this.nextFireAt = time + profile.cooldownMs;
+
+    this.spawnProjectile({
+      direction,
+      speed: profile.projectileSpeed,
+      damage: profile.damage,
+      lifetime: profile.lifetimeMs,
+      scale: 0.8,
+      tint: 0x98ff9c,
+      weaponType: 'sporeNeedlegun'
+    });
+  }
+
+  firePulseShotgun(time, direction) {
+    const profile = this.getPulseShotgunProfile();
+    if (time < this.nextFireAt || this.resources.ammo < profile.ammoCost) {
+      return;
+    }
+
+    this.resources.ammo = Math.max(0, this.resources.ammo - profile.ammoCost);
+    this.nextFireAt = time + profile.cooldownMs;
+
+    for (let pelletIndex = 0; pelletIndex < profile.pelletCount; pelletIndex += 1) {
+      const spread = Phaser.Math.FloatBetween(-profile.spread, profile.spread);
+      const pelletDirection = direction.clone().rotate(spread);
+
+      this.spawnProjectile({
+        direction: pelletDirection,
+        speed: profile.projectileSpeed,
+        damage: profile.pelletDamage,
+        lifetime: profile.lifetimeMs,
+        scale: 1.08,
+        tint: 0xffdd8e,
+        weaponType: 'pulseShotgun'
+      });
+    }
+  }
+
+  getLateSectorWeaponScalar() {
+    return Phaser.Math.Clamp((this.sectorIndex - 10) / 2, 0, 1);
+  }
+
+  getSporeNeedlegunProfile() {
+    const lateSectorScalar = this.getLateSectorWeaponScalar();
+
+    return {
+      ammoCost: 2,
+      cooldownMs: 195 - Math.round(lateSectorScalar * 16),
+      projectileSpeed: 790 + Math.round(lateSectorScalar * 20),
+      damage: 30 + Math.round(lateSectorScalar * 2),
+      lifetimeMs: 1180,
+      stalkerBonus: 8 + Math.round(lateSectorScalar * 2)
+    };
+  }
+
+  getPulseShotgunProfile() {
+    const lateSectorScalar = this.getLateSectorWeaponScalar();
+
+    return {
+      ammoCost: 5,
+      cooldownMs: 390 - Math.round(lateSectorScalar * 22),
+      pelletCount: 5 + Math.floor(lateSectorScalar),
+      pelletDamage: 9 + Math.round(lateSectorScalar),
+      spread: 0.26 - lateSectorScalar * 0.03,
+      projectileSpeed: 410 + Math.round(lateSectorScalar * 18),
+      lifetimeMs: 300 + Math.round(lateSectorScalar * 20),
+      knockbackStrength: 72 + Math.round(lateSectorScalar * 12)
+    };
   }
 
   spawnProjectile({ direction, speed, damage, lifetime, scale, tint, weaponType }) {
@@ -1005,30 +1491,35 @@ export class GameScene extends Phaser.Scene {
   }
 
   getMaxActiveEnemies(activeNodes) {
-    const sectorPressureBonus = Math.floor((this.sectorIndex - 1) / 2);
+    const sectorPressureBonus = Math.floor(this.getSectorTemplateIndex() / 2);
     const wavePressureBonus = Math.floor(Math.max(0, this.waveLevel - 1) * 0.7);
+    const progressionPressureBonus = this.getSectorProgressScalar() * 2.2;
     const baseEnemyBudget = 4 + activeNodes * 2;
-    const softCap = 7 + activeNodes * 3 + sectorPressureBonus * 2;
+    const softCap = 7 + activeNodes * 3 + sectorPressureBonus * 2 + progressionPressureBonus * 1.5;
 
-    return Phaser.Math.Clamp(baseEnemyBudget + sectorPressureBonus + wavePressureBonus, 5, softCap);
+    const targetBudget = baseEnemyBudget + sectorPressureBonus + wavePressureBonus + progressionPressureBonus;
+
+    return Phaser.Math.Clamp(Math.round(targetBudget), 5, Math.round(softCap));
   }
 
   getPickupSpawnDelayMs() {
-    const reductionPerSector = (this.sectorIndex - 1) * 220;
-    const minDelay = Phaser.Math.Clamp(3000 - reductionPerSector, 2200, 3000);
-    const maxDelay = Phaser.Math.Clamp(5500 - reductionPerSector, 3800, 5500);
+    const templateIndex = this.getSectorTemplateIndex();
+    const reductionPerSector = templateIndex * 110;
+    const minDelay = Phaser.Math.Clamp(3200 - reductionPerSector, 1800, 3200);
+    const maxDelay = Phaser.Math.Clamp(5600 - reductionPerSector, 3000, 5600);
 
     return Phaser.Math.Between(minDelay, maxDelay);
   }
 
   getEnemyNodeSpawnClearancePx() {
-    const scaledClearance = ENEMY_NODE_SPAWN_CLEARANCE_PX + (this.sectorIndex - 1) * ENEMY_NODE_SPAWN_CLEARANCE_BONUS_PER_SECTOR;
+    const scaledClearance = ENEMY_NODE_SPAWN_CLEARANCE_PX + this.getSectorTemplateIndex() * ENEMY_NODE_SPAWN_CLEARANCE_BONUS_PER_SECTOR;
     return Phaser.Math.Clamp(scaledClearance, ENEMY_NODE_SPAWN_CLEARANCE_PX, ENEMY_NODE_SPAWN_CLEARANCE_MAX_PX);
   }
 
   getPickupLifetimeMs() {
-    const scaledLifetime = PICKUP_BASE_LIFETIME_MS + (this.sectorIndex - 1) * PICKUP_LIFETIME_BONUS_PER_SECTOR_MS;
-    return Phaser.Math.Clamp(scaledLifetime, PICKUP_BASE_LIFETIME_MS, PICKUP_MAX_LIFETIME_MS);
+    const templateIndex = this.getSectorTemplateIndex();
+    const scaledLifetime = PICKUP_BASE_LIFETIME_MS - templateIndex * Math.floor(PICKUP_LIFETIME_BONUS_PER_SECTOR_MS * 0.35);
+    return Phaser.Math.Clamp(scaledLifetime, 5600, PICKUP_BASE_LIFETIME_MS);
   }
 
   spawnEnemy(minDistanceFromPlayer = NORMAL_MIN_SPAWN_DISTANCE, useForwardSector = false) {
@@ -1127,45 +1618,91 @@ export class GameScene extends Phaser.Scene {
   }
 
   getEnemyTypeByRoll(typeRoll) {
-    if (typeRoll > 90) {
+    const progression = this.getSectorProgressScalar();
+    const stalkerThreshold = 94 - progression * 14;
+    const bruteThreshold = 74 - progression * 10;
+
+    if (typeRoll > stalkerThreshold) {
       return 'stalker';
     }
-    if (typeRoll > 70) {
+    if (typeRoll > bruteThreshold) {
       return 'brute';
     }
     return 'spore';
   }
 
   getEnemyStats(type) {
+    const progression = this.getSectorProgressScalar();
+    const healthMultiplier = 1 + progression * 0.45;
+
     const statsByType = {
-      spore: { health: 40, speed: 82 + this.waveLevel * 3 },
-      brute: { health: 80, speed: 62 + this.waveLevel * 2 },
-      stalker: { health: 48, speed: 118 + this.waveLevel * 4 }
+      spore: {
+        health: Math.round(40 * healthMultiplier + progression * 6),
+        speed: Math.round(82 + this.waveLevel * 3 + progression * 14)
+      },
+      brute: {
+        health: Math.round(80 * healthMultiplier + progression * 12),
+        speed: Math.round(62 + this.waveLevel * 2 + progression * 10)
+      },
+      stalker: {
+        health: Math.round(48 * healthMultiplier + progression * 8),
+        speed: Math.round(118 + this.waveLevel * 4 + progression * 18)
+      }
     };
 
     return statsByType[type] || statsByType.spore;
   }
 
   spawnPickup() {
+    const weaponPickup = this.createWeaponPickupDefinition();
     const pickupTypeRoll = Phaser.Math.Between(1, 100);
-    const pickupType = pickupTypeRoll <= 60 ? 'ammo' : pickupTypeRoll <= 85 ? 'oxygen' : 'medkit';
+    const pickupType = weaponPickup && pickupTypeRoll <= Math.round(this.getWeaponPickupChance() * 100)
+      ? 'weapon'
+      : pickupTypeRoll <= 60
+        ? 'ammo'
+        : pickupTypeRoll <= 85
+          ? 'oxygen'
+          : 'medkit';
     const spawnPosition = this.getValidPickupSpawnPosition();
     if (!spawnPosition) {
       return;
     }
 
+    const pickupTexture = pickupType === 'weapon' ? 'weaponPickup' : pickupType;
     const pickup = this.pickups.create(
       spawnPosition.x,
       spawnPosition.y,
-      pickupType
+      pickupTexture
     );
 
     pickup.setData('type', pickupType);
+    if (pickupType === 'weapon' && weaponPickup) {
+      pickup.setData('weaponId', weaponPickup.weaponId);
+    }
     this.time.delayedCall(this.getPickupLifetimeMs(), () => {
       if (pickup.active) {
         pickup.disableBody(true, true);
       }
     });
+  }
+
+  createWeaponPickupDefinition() {
+    const candidates = WEAPON_UNLOCK_BY_SECTOR
+      .filter((entry) => entry.sector <= this.sectorIndex && entry.weaponId !== DEFAULT_EQUIPPED_WEAPON_ID)
+      .map((entry) => entry.weaponId)
+      .filter((weaponId) => weaponId !== this.equippedWeaponId);
+
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    const weaponId = Phaser.Utils.Array.GetRandom(candidates);
+    return { weaponId };
+  }
+
+  getWeaponPickupChance() {
+    const progressionBonus = this.getSectorProgressScalar() * 0.08;
+    return Phaser.Math.Clamp(WEAPON_PICKUP_BASE_CHANCE + progressionBonus, WEAPON_PICKUP_BASE_CHANCE, 0.22);
   }
 
   getValidPickupSpawnPosition() {
@@ -1219,6 +1756,24 @@ export class GameScene extends Phaser.Scene {
           enemy.clearTint();
         }
       });
+    } else if (weaponType === 'sporeNeedlegun' && enemy.getData('type') === 'stalker') {
+      totalDamage += this.getSporeNeedlegunProfile().stalkerBonus;
+      enemy.setTint(0xa9ffd4);
+      this.time.delayedCall(90, () => {
+        if (enemy.active) {
+          enemy.clearTint();
+        }
+      });
+    } else if (weaponType === 'pulseShotgun') {
+      const pulseProfile = this.getPulseShotgunProfile();
+      const projectileVelocity = projectile.body?.velocity;
+      if (projectileVelocity) {
+        const impulse = new Phaser.Math.Vector2(projectileVelocity.x, projectileVelocity.y);
+        if (impulse.lengthSq() > 0) {
+          impulse.normalize().scale(pulseProfile.knockbackStrength);
+          enemy.setVelocity(enemy.body.velocity.x + impulse.x, enemy.body.velocity.y + impulse.y);
+        }
+      }
     }
 
     enemy.health -= totalDamage;
@@ -1321,13 +1876,14 @@ export class GameScene extends Phaser.Scene {
     const pickupType = pickup.getData('type');
     let pickupText = '';
     let pickupTextColor = '#b8ffd2';
+    let pickupTextDurationMs = 550;
 
     this.pickupContactGraceUntil = this.time.now + PICKUP_CONTACT_GRACE_MS;
     this.lastPlayerHitAt = this.time.now;
 
     if (pickupType === 'ammo') {
-      const nextAmmo = Math.min(this.resources.ammo + 20, 180);
-      const nextFuel = Math.min(this.resources.fuel + 12, 120);
+      const nextAmmo = Math.min(this.resources.ammo + 26, 180);
+      const nextFuel = Math.min(this.resources.fuel + 16, 120);
       const ammoGain = Math.max(0, Math.round(nextAmmo - this.resources.ammo));
       const fuelGain = Math.max(0, Math.round(nextFuel - this.resources.fuel));
       this.resources.ammo = nextAmmo;
@@ -1358,11 +1914,25 @@ export class GameScene extends Phaser.Scene {
         pickupText += `  +${oxygenGain} O2`;
       }
       pickupTextColor = '#ff9da7';
+    } else if (pickupType === 'weapon') {
+      const weaponId = pickup.getData('weaponId');
+      const weapon = WEAPON_LOADOUT.find((loadoutWeapon) => loadoutWeapon.id === weaponId);
+      if (weapon && weapon.id !== this.equippedWeaponId) {
+        this.equippedWeaponId = weapon.id;
+      }
+
+      if (weapon) {
+        pickupText = `Weapon Crate: ${weapon.label}`;
+      } else {
+        pickupText = 'Weapon Crate';
+      }
+      pickupTextColor = '#cab6ff';
+      pickupTextDurationMs = 1160;
     } else {
       pickupText = 'PICKUP';
     }
 
-    this.showFloatingPickupText(pickupText, pickupTextColor, pickup.x, pickup.y - 18);
+    this.showFloatingPickupText(pickupText, pickupTextColor, pickup.x, pickup.y - 18, pickupTextDurationMs);
 
     this.player.setTint(0xb8ffd2);
     this.time.delayedCall(90, () => {
@@ -1463,7 +2033,7 @@ export class GameScene extends Phaser.Scene {
     return false;
   }
 
-  showFloatingPickupText(message, color, x, y) {
+  showFloatingPickupText(message, color, x, y, durationMs = 550) {
     const feedback = this.add
       .text(x, y, message, {
         fontFamily: 'Arial',
@@ -1478,7 +2048,7 @@ export class GameScene extends Phaser.Scene {
       targets: feedback,
       y: y - 20,
       alpha: 0,
-      duration: 550,
+      duration: durationMs,
       ease: 'Sine.easeOut',
       onComplete: () => feedback.destroy()
     });
@@ -1541,6 +2111,7 @@ export class GameScene extends Phaser.Scene {
     const hudLines = [
       `Sector: ${this.sectorIndex}`,
       `HP: ${Math.ceil(this.resources.health)}`,
+      `Weapon: ${weapon.label}`,
       `${ammoLabel}: ${this.getWeaponAmmoValue(weapon.id)}`
     ];
 
@@ -1554,7 +2125,7 @@ export class GameScene extends Phaser.Scene {
         `DBG Nodes ${activeNodes}/${this.objective.required} HP:${this.getObjectiveNodeHealth()}`,
         `DBG Enemies ${aliveEnemies}/${maxEnemies} Wave:${this.waveLevel.toFixed(2)}`,
         `DBG Clearance ${this.getEnemyNodeSpawnClearancePx()} Pickup ${Math.ceil(nextPickupInMs / 1000)}s/${Math.ceil(this.getPickupLifetimeMs() / 1000)}s`,
-        'DBG QA: S1-3 pass | corridor jams | rapid pause/restart | pickup grace | sector loop'
+        `DBG Layout ${this.getSectorTemplateIndex() + 1}/12 Band:${this.getSectorBandIndex() + 1}`
       );
     }
 

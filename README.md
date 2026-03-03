@@ -4,15 +4,13 @@ Top-down survival shooter prototype built with Phaser 3 + Vite.
 
 ## Milestone Tracking
 
-- Next-session handoff checklist: `docs/todo-next-session.md`
-- Next milestone plan: `docs/milestone-next.md`
-- Next milestone schedule: `docs/milestone-next-schedule.md`
+- Canonical development guide: `docs/development-guide.md`
 
 ## Current MVP Scope
 
 - Start menu with settings/remapping flow
-- Keyboard + gamepad controls (preset + custom per-action remaps)
-- Pause menu with resume/restart/volume
+- Gamepad-first controls (preset + custom gamepad remaps)
+- Pause menu with resume/restart/main-menu/volume
 - Survival combat loop with pickups, enemies, and sector progression
 - Gauntlet-like objective flow:
   - Destroy infestation nodes to stop spawns
@@ -28,10 +26,13 @@ Top-down survival shooter prototype built with Phaser 3 + Vite.
   - Shiv Pistol (ammo)
   - Incinerator Carbine (fuel)
   - UV Arc Cutter (heat)
+  - Spore Needlegun (precision ammo)
+  - Pulse Shotgun (close-range burst)
 - Pickup types:
   - Ammo (blue): ammo + fuel
   - Oxygen (cyan): oxygen + contamination relief
   - Medkit (red cross): health + oxygen + minor contamination relief
+  - Weapon Crate (violet): random unlocked weapon swap with on-pickup weapon-name hint
 - Floating combat/pickup feedback text for damage and resource gains
 - Player/enemy collision against walls and objective nodes
 - Enemy spawn safety offset around active nodes to reduce chokepoint jams
@@ -56,14 +57,6 @@ If HP reaches 0:
 
 ## Controls
 
-Default keyboard:
-
-- Move: `W A S D` (fallback arrow keys also supported)
-- Fire: `Space` (mouse fire is also accepted)
-- Interact: `E`
-- Pause: `Esc`
-- Sprint: `Shift`
-
 Default gamepad:
 
 - Move: left stick (with axis fallback)
@@ -73,16 +66,17 @@ Default gamepad:
 
 Menu behavior:
 
-- StartScene selector: `Enter` (keyboard) or `A` (gamepad)
+- StartScene selector: `A`
 - Start button is not used as selector on StartScene
-- Menu navigation in Start/Pause uses left stick with deadzone filtering
+- Menu navigation in Start/Pause/GameOver uses left stick with deadzone filtering
+- Back/cancel in menus uses `B`
+- Pause menu includes `Main Menu` to safely exit the current run
 
 Controls can be changed in Settings:
 
 - Control preset selection
-- Per-action keyboard remap
 - Per-action gamepad remap
-- Device-specific/default restore options
+- Restore custom binds to defaults
 
 ## Project Structure
 
@@ -94,9 +88,7 @@ Controls can be changed in Settings:
 - `src/scenes/GameOverScene.js` - Post-death game over + restart flow
 - `src/config/controls.js` - Control presets and remap helpers
 - `src/config/debug.js` - Global debug toggle and debug URL flag helpers
-- `docs/plan-prisoner-starship-bloom.prompt.md` - Original game plan
-- `docs/weapon-system-ideas.md` - Weapon ideas/backlog
-- `docs/todo-next-session.md` - Next-session handoff checklist
+- `docs/development-guide.md` - Canonical plan, milestones, QA workflow, and handoff notes
 
 ## Run Locally
 

@@ -2,15 +2,12 @@ import Phaser from 'phaser';
 import {
   clearCustomBindings,
   clearCustomGamepadBindings,
-  clearCustomKeyboardBindings,
   GAMEPAD_ACTIONS,
   getControlConfig,
   getControlPresetName,
   getControlPresetOptions,
   hasCustomBindings,
-  KEYBOARD_ACTIONS,
-  setCustomGamepadBinding,
-  setCustomKeyboardBinding
+  setCustomGamepadBinding
 } from '../config/controls.js';
 
 const MENU_STICK_DEADZONE = 0.5;
@@ -23,7 +20,7 @@ export class StartScene extends Phaser.Scene {
     this.settingsSelection = 0;
     this.remapSelection = 0;
     this.mainOptions = ['Start Run', 'Settings'];
-    this.settingsOptions = ['SFX Volume', 'Control Preset', 'Remap Keyboard', 'Remap Gamepad', 'Reset Custom Binds', 'Back'];
+    this.settingsOptions = ['SFX Volume', 'Control Preset', 'Remap Gamepad', 'Reset Custom Binds', 'Back'];
     this.controlPresetOptions = [];
     this.awaitingBinding = null;
     this.awaitingBindReadyAt = 0;
@@ -31,9 +28,25 @@ export class StartScene extends Phaser.Scene {
     this.pendingRestoreMode = null;
     this.onGamepadDisconnected = null;
     this.detectedGamepadName = null;
+    this.previousGamepadButtons = {};
+    this.confirmInputArmed = false;
+    this.mainMenuMessage = '';
+    this.mainMenuMessageExpiresAt = 0;
   }
 
   create() {
+    this.menuMode = 'main';
+    this.mainSelection = 0;
+    this.settingsSelection = 0;
+    this.remapSelection = 0;
+    this.awaitingBinding = null;
+    this.pendingRestoreMode = null;
+    this.previousGamepadButtons = {};
+    this.confirmInputArmed = false;
+    this.mainMenuMessage = '';
+    this.mainMenuMessageExpiresAt = 0;
+    this.nextMenuInputAt = this.time.now + 220;
+
     this.initializeSettings();
     this.controlPresetOptions = getControlPresetOptions();
 
@@ -53,7 +66,7 @@ export class StartScene extends Phaser.Scene {
       align: 'center'
     }).setOrigin(0.5);
 
-    const menuLineCount = Math.max(this.mainOptions.length, this.settingsOptions.length, KEYBOARD_ACTIONS.length + 1, GAMEPAD_ACTIONS.length + 1);
+    const menuLineCount = Math.max(this.mainOptions.length, this.settingsOptions.length, GAMEPAD_ACTIONS.length + 1);
     this.menuTexts = Array.from({ length: menuLineCount }, (_, index) => {
       return this.add.text(width / 2, height * 0.5 + index * 52, '', {
         fontFamily: 'Arial',
@@ -68,18 +81,7 @@ export class StartScene extends Phaser.Scene {
       color: '#ffbbd5'
     }).setOrigin(0.5);
 
-    this.keys = this.input.keyboard.addKeys({
-      up: 'UP',
-      down: 'DOWN',
-      left: 'LEFT',
-      right: 'RIGHT',
-      confirm: 'ENTER',
-      alternateConfirm: 'SPACE',
-      back: 'ESC'
-    });
-
     this.input.on('pointerdown', this.onPointerDown, this);
-    this.input.keyboard.on('keydown', this.onAnyKeyDown, this);
 
     if (this.input.gamepad) {
       this.input.gamepad.once('connected', (pad) => {
@@ -104,7 +106,6 @@ export class StartScene extends Phaser.Scene {
 
     this.events.on('shutdown', () => {
       this.input.off('pointerdown', this.onPointerDown, this);
-      this.input.keyboard.off('keydown', this.onAnyKeyDown, this);
       if (this.input.gamepad && this.onGamepadDisconnected) {
         this.input.gamepad.off('disconnected', this.onGamepadDisconnected);
       }
@@ -122,10 +123,6 @@ export class StartScene extends Phaser.Scene {
       this.registry.set('controlPreset', 'default');
     }
 
-    if (!this.registry.has('customKeyboardBinds')) {
-      this.registry.set('customKeyboardBinds', {});
-    }
-
     if (!this.registry.has('customGamepadBinds')) {
       this.registry.set('customGamepadBinds', {});
     }
@@ -134,13 +131,20 @@ export class StartScene extends Phaser.Scene {
   }
 
   update() {
+    if (this.mainMenuMessage && this.time.now >= this.mainMenuMessageExpiresAt) {
+      this.mainMenuMessage = '';
+      this.mainMenuMessageExpiresAt = 0;
+      this.refreshView();
+    }
+
     this.refreshGamepadConnectionState();
+    this.updateConfirmInputArmState();
 
     if (this.tryCaptureGamepadBinding()) {
       return;
     }
 
-    const backPressed = Phaser.Input.Keyboard.JustDown(this.keys.back) || this.isGamepadBackPressed();
+    const backPressed = this.confirmInputArmed && this.isGamepadBackPressed();
     if (backPressed) {
       this.handleBackAction();
       return;
@@ -150,27 +154,57 @@ export class StartScene extends Phaser.Scene {
       return;
     }
 
-    if (this.consumeMenuInput(Phaser.Input.Keyboard.JustDown(this.keys.up) || this.isGamepadUpPressed())) {
+    if (this.consumeMenuInput(this.isGamepadUpPressed())) {
       this.moveSelection(-1);
     }
 
-    if (this.consumeMenuInput(Phaser.Input.Keyboard.JustDown(this.keys.down) || this.isGamepadDownPressed())) {
+    if (this.consumeMenuInput(this.isGamepadDownPressed())) {
       this.moveSelection(1);
     }
 
-    if (this.consumeMenuInput(Phaser.Input.Keyboard.JustDown(this.keys.left) || this.isGamepadLeftPressed())) {
+    if (this.consumeMenuInput(this.isGamepadLeftPressed())) {
       this.adjustCurrentSetting(-1);
     }
 
-    if (this.consumeMenuInput(Phaser.Input.Keyboard.JustDown(this.keys.right) || this.isGamepadRightPressed())) {
+    if (this.consumeMenuInput(this.isGamepadRightPressed())) {
       this.adjustCurrentSetting(1);
     }
 
-    const keyboardConfirm = Phaser.Input.Keyboard.JustDown(this.keys.confirm) || Phaser.Input.Keyboard.JustDown(this.keys.alternateConfirm);
-    const gamepadConfirm = this.isGamepadConfirmPressed();
-    if (this.consumeMenuInput(keyboardConfirm || gamepadConfirm)) {
+    const gamepadConfirm = this.confirmInputArmed && this.isGamepadConfirmPressed();
+    if (this.consumeMenuInput(gamepadConfirm)) {
       this.confirmSelection();
     }
+  }
+
+  updateConfirmInputArmState() {
+    if (this.confirmInputArmed) {
+      return;
+    }
+
+    if (this.isAnyConfirmInputHeld()) {
+      this.syncConfirmButtonStates();
+      return;
+    }
+
+    this.confirmInputArmed = true;
+    this.syncConfirmButtonStates();
+  }
+
+  isAnyConfirmInputHeld() {
+    const pointerConfirmHeld = this.input?.activePointer?.isDown === true;
+    const controls = getControlConfig(this.registry);
+    const interactButton = controls?.gamepad?.interactButton ?? 0;
+    const gamepadConfirmHeld = this.isGamepadButtonPressed(interactButton);
+    const gamepadBackHeld = this.isGamepadButtonPressed(1);
+
+    return pointerConfirmHeld || gamepadConfirmHeld || gamepadBackHeld;
+  }
+
+  syncConfirmButtonStates() {
+    const controls = getControlConfig(this.registry);
+    const interactButton = controls?.gamepad?.interactButton ?? 0;
+    this.previousGamepadButtons[interactButton] = this.isGamepadButtonPressed(interactButton);
+    this.previousGamepadButtons[1] = this.isGamepadButtonPressed(1);
   }
 
   consumeMenuInput(isRequested) {
@@ -205,11 +239,11 @@ export class StartScene extends Phaser.Scene {
   isGamepadConfirmPressed() {
     const controls = getControlConfig(this.registry);
     const interactButton = controls?.gamepad?.interactButton ?? 0;
-    return this.isGamepadButtonPressed(interactButton);
+    return this.isGamepadButtonJustPressed(interactButton);
   }
 
   isGamepadBackPressed() {
-    return this.isGamepadButtonPressed(1);
+    return this.isGamepadButtonJustPressed(1);
   }
 
   isGamepadButtonPressed(buttonIndex) {
@@ -223,6 +257,13 @@ export class StartScene extends Phaser.Scene {
     }
 
     return !!browserPad.buttons[buttonIndex].pressed;
+  }
+
+  isGamepadButtonJustPressed(buttonIndex) {
+    const pressedNow = this.isGamepadButtonPressed(buttonIndex);
+    const wasPressed = this.previousGamepadButtons[buttonIndex] === true;
+    this.previousGamepadButtons[buttonIndex] = pressedNow;
+    return pressedNow && !wasPressed;
   }
 
   getGamepadAxisValue(axisIndex) {
@@ -278,15 +319,11 @@ export class StartScene extends Phaser.Scene {
       return;
     }
 
-    if (this.menuMode === 'main' && this.mainSelection === 0) {
-      this.startGame();
+    if (!this.confirmInputArmed) {
       return;
     }
 
-    if (this.menuMode === 'main' && this.mainSelection === 1) {
-      this.menuMode = 'settings';
-      this.settingsSelection = 0;
-      this.refreshView();
+    if (!this.consumeMenuInput(true)) {
       return;
     }
 
@@ -301,8 +338,7 @@ export class StartScene extends Phaser.Scene {
     } else if (this.menuMode === 'settings') {
       this.settingsSelection = Phaser.Math.Wrap(this.settingsSelection + direction, 0, this.settingsOptions.length);
     } else {
-      const actions = this.menuMode === 'remapKeyboard' ? KEYBOARD_ACTIONS : GAMEPAD_ACTIONS;
-      this.remapSelection = Phaser.Math.Wrap(this.remapSelection + direction, 0, actions.length + 1);
+      this.remapSelection = Phaser.Math.Wrap(this.remapSelection + direction, 0, GAMEPAD_ACTIONS.length + 1);
     }
     this.refreshView();
   }
@@ -339,20 +375,13 @@ export class StartScene extends Phaser.Scene {
     }
 
     if (this.settingsSelection === 2) {
-      this.menuMode = 'remapKeyboard';
-      this.remapSelection = 0;
-      this.refreshView();
-      return;
-    }
-
-    if (this.settingsSelection === 3) {
       this.menuMode = 'remapGamepad';
       this.remapSelection = 0;
       this.refreshView();
       return;
     }
 
-    if (this.settingsSelection === 4) {
+    if (this.settingsSelection === 3) {
       clearCustomBindings(this.registry);
       this.refreshView();
       return;
@@ -376,7 +405,7 @@ export class StartScene extends Phaser.Scene {
       return;
     }
 
-    if (this.menuMode === 'remapKeyboard' || this.menuMode === 'remapGamepad') {
+    if (this.menuMode === 'remapGamepad') {
       this.menuMode = 'settings';
       this.settingsSelection = 0;
       this.refreshView();
@@ -423,7 +452,7 @@ export class StartScene extends Phaser.Scene {
   }
 
   beginBindingCapture() {
-    const actionList = this.menuMode === 'remapKeyboard' ? KEYBOARD_ACTIONS : GAMEPAD_ACTIONS;
+    const actionList = GAMEPAD_ACTIONS;
 
     if (this.remapSelection === actionList.length) {
       if (this.pendingRestoreMode !== this.menuMode) {
@@ -432,11 +461,7 @@ export class StartScene extends Phaser.Scene {
         return;
       }
 
-      if (this.menuMode === 'remapKeyboard') {
-        clearCustomKeyboardBindings(this.registry);
-      } else {
-        clearCustomGamepadBindings(this.registry);
-      }
+      clearCustomGamepadBindings(this.registry);
 
       this.pendingRestoreMode = null;
       this.refreshView();
@@ -451,69 +476,11 @@ export class StartScene extends Phaser.Scene {
     }
 
     this.awaitingBinding = {
-      type: this.menuMode === 'remapKeyboard' ? 'keyboard' : 'gamepad',
+      type: 'gamepad',
       action: selectedAction.value
     };
     this.awaitingBindReadyAt = this.time.now + 180;
     this.refreshView();
-  }
-
-  onAnyKeyDown(event) {
-    if (!this.awaitingBinding || this.awaitingBinding.type !== 'keyboard') {
-      return;
-    }
-
-    if (this.time.now < this.awaitingBindReadyAt) {
-      return;
-    }
-
-    const keyName = this.toPhaserKeyName(event);
-    if (!keyName) {
-      return;
-    }
-
-    if (keyName === 'ESC') {
-      this.awaitingBinding = null;
-      this.refreshView();
-      return;
-    }
-
-    setCustomKeyboardBinding(this.registry, this.awaitingBinding.action, keyName);
-    this.awaitingBinding = null;
-    this.refreshView();
-  }
-
-  toPhaserKeyName(event) {
-    const codeMap = {
-      Escape: 'ESC',
-      Enter: 'ENTER',
-      Space: 'SPACE',
-      ArrowUp: 'UP',
-      ArrowDown: 'DOWN',
-      ArrowLeft: 'LEFT',
-      ArrowRight: 'RIGHT',
-      ShiftLeft: 'SHIFT',
-      ShiftRight: 'SHIFT',
-      ControlLeft: 'CTRL',
-      ControlRight: 'CTRL',
-      AltLeft: 'ALT',
-      AltRight: 'ALT',
-      Tab: 'TAB'
-    };
-
-    if (codeMap[event.code]) {
-      return codeMap[event.code];
-    }
-
-    if (event.code.startsWith('Key')) {
-      return event.code.slice(3).toUpperCase();
-    }
-
-    if (event.code.startsWith('Digit')) {
-      return event.code.slice(5);
-    }
-
-    return null;
   }
 
   tryCaptureGamepadBinding() {
@@ -566,7 +533,7 @@ export class StartScene extends Phaser.Scene {
         this.menuTexts[index].setColor(selected ? '#ffb8d6' : '#e7f2eb');
       });
 
-      this.helpText.setText('');
+      this.helpText.setText(this.mainMenuMessage || '');
       return;
     }
 
@@ -575,7 +542,6 @@ export class StartScene extends Phaser.Scene {
       const settingLines = [
         `SFX Volume: ${Math.round(sfxVolume * 100)}%`,
         `Control Preset: ${currentPresetLabel}`,
-        'Remap Keyboard',
         'Remap Gamepad',
         `Reset Custom Binds (${customActive ? 'ON' : 'OFF'})`,
         'Back'
@@ -592,12 +558,10 @@ export class StartScene extends Phaser.Scene {
       return;
     }
 
-    const actionList = this.menuMode === 'remapKeyboard' ? KEYBOARD_ACTIONS : GAMEPAD_ACTIONS;
+    const actionList = GAMEPAD_ACTIONS;
     actionList.forEach((action, index) => {
       const selected = index === this.remapSelection;
-      const binding = this.menuMode === 'remapKeyboard'
-        ? controlConfig.keyboard[action.value]
-        : this.getGamepadActionDisplay(action.value, controlConfig.gamepad);
+      const binding = this.getGamepadActionDisplay(action.value, controlConfig.gamepad);
 
       const awaitingThisAction = this.awaitingBinding && this.awaitingBinding.action === action.value;
       const bindSuffix = awaitingThisAction ? '  [Press input...]' : '';
@@ -615,18 +579,30 @@ export class StartScene extends Phaser.Scene {
     this.menuTexts[restoreIndex].setColor(restoreSelected ? '#ffb8d6' : '#e7f2eb');
 
     if (restorePending) {
-      this.helpText.setText('Confirm again to restore all for this device  •  Esc/B Cancel');
+      this.helpText.setText('Confirm again to restore all for this device  •  B Cancel');
       return;
     }
 
-    this.helpText.setText('Enter/A/Start Bind  •  Left Stick ↑/↓ Navigate  •  Esc/B Back/Cancel');
+    this.helpText.setText('A Bind  •  Left Stick ↑/↓ Navigate  •  B Back/Cancel');
   }
 
   startGame() {
+    this.startGameAtSector(1);
+  }
+
+  setMainMenuMessage(message, durationMs = 2600) {
+    this.mainMenuMessage = message;
+    this.mainMenuMessageExpiresAt = this.time.now + durationMs;
+    this.refreshView();
+  }
+
+  startGameAtSector(sectorIndex) {
+    const normalizedSector = Math.max(1, Math.round(Number(sectorIndex) || 1));
+
     if (!this.scene.isActive('GameScene')) {
-      this.registry.set('sectorIndex', 1);
+      this.registry.set('sectorIndex', normalizedSector);
       this.scene.start('GameScene', {
-        sectorIndex: 1,
+        sectorIndex: normalizedSector,
         carryResources: false
       });
     }

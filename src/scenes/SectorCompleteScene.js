@@ -39,12 +39,6 @@ export class SectorCompleteScene extends Phaser.Scene {
       color: '#a9d7ff'
     }).setOrigin(0.5);
 
-    this.keys = this.input.keyboard.addKeys({
-      confirm: 'ENTER',
-      altConfirm: 'SPACE',
-      back: 'ESC'
-    });
-
     if (this.input.gamepad) {
       this.input.gamepad.once('connected', (pad) => {
         this.pad = pad;
@@ -66,16 +60,15 @@ export class SectorCompleteScene extends Phaser.Scene {
       return;
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.back) || this.isGamepadButtonJustPressed(1)) {
+    if (this.isGamepadButtonJustPressed(1)) {
       this.transitionQueued = true;
       this.scene.start('StartScene');
       return;
     }
 
-    const keyboardConfirm = Phaser.Input.Keyboard.JustDown(this.keys.confirm) || Phaser.Input.Keyboard.JustDown(this.keys.altConfirm);
     const gamepadConfirm = this.isGamepadButtonJustPressed(GAMEPAD_CONFIRM_BUTTON);
 
-    if (keyboardConfirm || gamepadConfirm) {
+    if (gamepadConfirm) {
       this.transitionQueued = true;
       this.registry.set('sectorIndex', this.nextSectorIndex);
       this.scene.start('GameScene', {

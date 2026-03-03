@@ -8,7 +8,7 @@ export class PauseScene extends Phaser.Scene {
   constructor() {
     super('PauseScene');
     this.selectedOption = 0;
-    this.options = ['Resume', 'Restart Sector', 'SFX Volume'];
+    this.options = ['Resume', 'Restart Sector', 'Main Menu', 'SFX Volume'];
     this.pauseInputLockUntil = 0;
     this.previousGamepadButtons = {};
     this.transitionQueued = false;
@@ -54,15 +54,6 @@ export class PauseScene extends Phaser.Scene {
       color: '#f6dcb5'
     }).setOrigin(0.5);
 
-    this.keys = this.input.keyboard.addKeys({
-      up: 'UP',
-      down: 'DOWN',
-      left: 'LEFT',
-      right: 'RIGHT',
-      confirm: 'ENTER',
-      resume: 'ESC'
-    });
-
     if (this.input.gamepad) {
       this.input.gamepad.once('connected', (pad) => {
         this.pad = pad;
@@ -92,31 +83,31 @@ export class PauseScene extends Phaser.Scene {
     const stickRightPressed = this.isStickDirectionJustPressed('right', currentStickDirections);
     const gamepadConfirmPressed = this.isGamepadConfirmJustPressed();
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.resume) || gamepadPausePressed) {
+    if (gamepadPausePressed) {
       this.previousStickDirections = currentStickDirections;
       this.resumeGame();
       return;
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.up) || stickUpPressed) {
+    if (stickUpPressed) {
       this.selectedOption = Phaser.Math.Wrap(this.selectedOption - 1, 0, this.options.length);
       this.refreshMenu();
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.down) || stickDownPressed) {
+    if (stickDownPressed) {
       this.selectedOption = Phaser.Math.Wrap(this.selectedOption + 1, 0, this.options.length);
       this.refreshMenu();
     }
 
-    if (this.selectedOption === 2 && (Phaser.Input.Keyboard.JustDown(this.keys.left) || stickLeftPressed)) {
+    if (this.selectedOption === 3 && stickLeftPressed) {
       this.adjustVolume(-0.1);
     }
 
-    if (this.selectedOption === 2 && (Phaser.Input.Keyboard.JustDown(this.keys.right) || stickRightPressed)) {
+    if (this.selectedOption === 3 && stickRightPressed) {
       this.adjustVolume(0.1);
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.confirm) || gamepadConfirmPressed) {
+    if (gamepadConfirmPressed) {
       this.confirmSelection();
     }
 
@@ -249,6 +240,16 @@ export class PauseScene extends Phaser.Scene {
       return;
     }
 
+    if (this.selectedOption === 2) {
+      this.transitionQueued = true;
+      this.scene.stop('PauseScene');
+      if (this.scene.isActive('GameScene') || this.scene.isPaused('GameScene')) {
+        this.scene.stop('GameScene');
+      }
+      this.scene.start('StartScene');
+      return;
+    }
+
     this.adjustVolume(0.1);
   }
 
@@ -257,7 +258,7 @@ export class PauseScene extends Phaser.Scene {
 
     this.optionTexts.forEach((textObject, index) => {
       let label = this.options[index];
-      if (index === 2) {
+      if (index === 3) {
         label = `${label}: ${Math.round(sfxVolume * 100)}%`;
       }
 
