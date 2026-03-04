@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
-const GAMEPAD_CONFIRM_BUTTON = 0;
+const GAMEPAD_CONTINUE_BUTTON = 0;
+const GAMEPAD_MENU_BUTTON = 1;
 
 export class SectorCompleteScene extends Phaser.Scene {
   constructor() {
@@ -39,6 +40,42 @@ export class SectorCompleteScene extends Phaser.Scene {
       color: '#a9d7ff'
     }).setOrigin(0.5);
 
+    this.add.text(width / 2, height * 0.62, 'B to continue  ·  A for Main Menu', {
+      fontFamily: 'Arial',
+      fontSize: '18px',
+      color: '#6a7a6a'
+    }).setOrigin(0.5);
+
+    this.continueButton = this.add.text(width / 2, height * 0.72, 'CONTINUE', {
+      fontFamily: 'Arial',
+      fontSize: '28px',
+      color: '#d6f7cb',
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    this.menuButton = this.add.text(width / 2, height * 0.80, 'MAIN MENU', {
+      fontFamily: 'Arial',
+      fontSize: '24px',
+      color: '#a9d7ff'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    this.continueButton.on('pointerdown', this.advanceToNextSector, this);
+    this.menuButton.on('pointerdown', this.returnToMainMenu, this);
+
+    this.continueButton.on('pointerover', () => {
+      this.continueButton.setColor('#f1ffd6');
+    });
+    this.continueButton.on('pointerout', () => {
+      this.continueButton.setColor('#d6f7cb');
+    });
+
+    this.menuButton.on('pointerover', () => {
+      this.menuButton.setColor('#cce7ff');
+    });
+    this.menuButton.on('pointerout', () => {
+      this.menuButton.setColor('#a9d7ff');
+    });
+
     if (this.input.gamepad) {
       this.input.gamepad.once('connected', (pad) => {
         this.pad = pad;
@@ -60,25 +97,42 @@ export class SectorCompleteScene extends Phaser.Scene {
       return;
     }
 
-    if (this.isGamepadButtonJustPressed(1)) {
-      this.transitionQueued = true;
-      this.scene.start('StartScene');
+    const gamepadContinue = this.isGamepadButtonJustPressed(GAMEPAD_CONTINUE_BUTTON);
+    const gamepadMenu = this.isGamepadButtonJustPressed(GAMEPAD_MENU_BUTTON);
+
+    if (gamepadContinue) {
+      this.advanceToNextSector();
       return;
     }
 
-    const gamepadConfirm = this.isGamepadButtonJustPressed(GAMEPAD_CONFIRM_BUTTON);
-
-    if (gamepadConfirm) {
-      this.transitionQueued = true;
-      this.registry.set('sectorIndex', this.nextSectorIndex);
-      this.scene.start('GameScene', {
-        sectorIndex: this.nextSectorIndex,
-        carryResources: true,
-        carriedResources: this.carriedResources,
-        carriedWeaponId: this.carriedWeaponId,
-        carriedWaveLevel: this.carriedWaveLevel
-      });
+    if (gamepadMenu) {
+      this.returnToMainMenu();
     }
+  }
+
+  advanceToNextSector() {
+    if (this.transitionQueued) {
+      return;
+    }
+
+    this.transitionQueued = true;
+    this.registry.set('sectorIndex', this.nextSectorIndex);
+    this.scene.start('GameScene', {
+      sectorIndex: this.nextSectorIndex,
+      carryResources: true,
+      carriedResources: this.carriedResources,
+      carriedWeaponId: this.carriedWeaponId,
+      carriedWaveLevel: this.carriedWaveLevel
+    });
+  }
+
+  returnToMainMenu() {
+    if (this.transitionQueued) {
+      return;
+    }
+
+    this.transitionQueued = true;
+    this.scene.start('StartScene');
   }
 
   isGamepadButtonPressed(buttonIndex) {

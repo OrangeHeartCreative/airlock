@@ -26,14 +26,29 @@ export const GAMEPAD_ACTIONS = [
   { value: 'pauseButton', label: 'Pause Button' }
 ];
 
+function resolveControlPreset(presetName) {
+  const normalizedName = typeof presetName === 'string' ? presetName : 'default';
+  if (Object.prototype.hasOwnProperty.call(CONTROL_PRESETS, normalizedName)) {
+    return {
+      name: normalizedName,
+      preset: CONTROL_PRESETS[normalizedName]
+    };
+  }
+
+  return {
+    name: 'default',
+    preset: CONTROL_PRESETS.default
+  };
+}
+
 export function getControlPresetName(registry) {
   const presetName = registry.get('controlPreset') ?? 'default';
-  return CONTROL_PRESETS[presetName] ? presetName : 'default';
+  return resolveControlPreset(presetName).name;
 }
 
 export function getControlConfig(registry) {
   const presetName = getControlPresetName(registry);
-  const preset = CONTROL_PRESETS[presetName];
+  const { preset } = resolveControlPreset(presetName);
   const customGamepadBinds = registry.get('customGamepadBinds') ?? {};
 
   const gamepadConfig = {
@@ -65,12 +80,12 @@ export function setCustomGamepadBinding(registry, action, buttonIndex) {
   });
 }
 
-export function clearCustomBindings(registry) {
+export function clearCustomGamepadBindings(registry) {
   registry.set('customGamepadBinds', {});
 }
 
-export function clearCustomGamepadBindings(registry) {
-  registry.set('customGamepadBinds', {});
+export function clearCustomBindings(registry) {
+  clearCustomGamepadBindings(registry);
 }
 
 export function hasCustomBindings(registry) {

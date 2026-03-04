@@ -116,7 +116,7 @@ export class PauseScene extends Phaser.Scene {
 
   isGamepadPauseJustPressed() {
     const pauseButton = this.controls?.gamepad?.pauseButton ?? 9;
-    const isPressed = this.pad ? this.pad.buttons[pauseButton]?.pressed === true : false;
+    const isPressed = this.isGamepadButtonPressed(pauseButton);
     const isArmed = this.registry.get(PAUSE_BUTTON_ARMED_KEY) !== false;
 
     if (!isPressed) {
@@ -145,15 +145,36 @@ export class PauseScene extends Phaser.Scene {
   }
 
   syncGamepadButtonState(buttonIndex) {
-    const isPressed = this.pad ? this.pad.buttons[buttonIndex]?.pressed === true : false;
+    const isPressed = this.isGamepadButtonPressed(buttonIndex);
     this.previousGamepadButtons[buttonIndex] = isPressed;
   }
 
   isGamepadButtonJustPressed(buttonIndex) {
-    const isPressed = this.pad ? this.pad.buttons[buttonIndex]?.pressed === true : false;
+    const isPressed = this.isGamepadButtonPressed(buttonIndex);
     const wasPressed = this.previousGamepadButtons[buttonIndex] === true;
     this.previousGamepadButtons[buttonIndex] = isPressed;
     return isPressed && !wasPressed;
+  }
+
+  isGamepadButtonPressed(buttonIndex) {
+    if (this.pad && this.pad.buttons && this.pad.buttons.length > buttonIndex) {
+      return this.pad.buttons[buttonIndex]?.pressed === true;
+    }
+
+    const browserNavigator = typeof globalThis !== 'undefined' ? globalThis.navigator : undefined;
+    if (!browserNavigator || !browserNavigator.getGamepads) {
+      return false;
+    }
+
+    const pads = browserNavigator.getGamepads();
+    for (let index = 0; index < pads.length; index += 1) {
+      const browserPad = pads[index];
+      if (browserPad && browserPad.buttons && browserPad.buttons.length > buttonIndex && browserPad.buttons[buttonIndex].pressed) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   isGamepadConfirmJustPressed() {
@@ -242,11 +263,31 @@ export class PauseScene extends Phaser.Scene {
 
     if (this.selectedOption === 2) {
       this.transitionQueued = true;
-      this.scene.stop('PauseScene');
+      this.registry.set(PAUSE_BUTTON_ARMED_KEY, true);
+      this.registry.set('pauseInputLockUntil', this.time.now + 250);
+
+      if (this.input?.manager?.resetPointers) {
+        this.input.manager.resetPointers();
+      }
+
+      if (this.scene.isActive('SectorCompleteScene') || this.scene.isPaused('SectorCompleteScene')) {
+        this.scene.stop('SectorCompleteScene');
+      }
+
+      if (this.scene.isActive('GameOverScene') || this.scene.isPaused('GameOverScene')) {
+        this.scene.stop('GameOverScene');
+      }
+
+      if (this.scene.isActive('StartScene') || this.scene.isPaused('StartScene') || this.scene.isSleeping('StartScene')) {
+        this.scene.stop('StartScene');
+      }
+
       if (this.scene.isActive('GameScene') || this.scene.isPaused('GameScene')) {
         this.scene.stop('GameScene');
       }
-      this.scene.start('StartScene');
+
+      this.scene.start('StartScene', { fromPauseMenu: true, forceUnlockInput: true });
+      this.scene.stop();
       return;
     }
 

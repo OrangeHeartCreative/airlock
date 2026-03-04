@@ -1,6 +1,6 @@
 # Airlock Development Guide
 
-Date: 2026-03-03
+Date: 2026-03-04
 Status: Canonical development document
 
 ## How to Use This Guide
@@ -31,8 +31,17 @@ Status: Canonical development document
 
 ### Input Model
 - Active model is gamepad-first.
-- Gameplay/menu flows are aligned to gamepad controls.
-- Keyboard control surface was removed from active gameplay/menu configuration.
+- Gameplay/menu flows are aligned to gamepad controls with pointer support where applicable.
+- Keyboard input is disabled across all scenes (no movement, confirm, or back actions bound to keys).
+- `SectorCompleteScene` progression is pointer/gamepad only:
+  - Continue: click `CONTINUE` or gamepad `B`.
+  - Return to menu: click `MAIN MENU` or gamepad `A`.
+- `StartScene` menu input uses an arm-gate + edge-trigger model:
+  - On scene create, input is disarmed. The menu becomes responsive only after all face buttons are fully released.
+  - Confirm and back fire on the press edge (down → not-down → down), never on held state.
+  - Directional navigation (stick or D-pad) uses a hold-to-scroll debounce once armed.
+  - This prevents phantom confirms when arriving from a scene transition with a button still physically held.
+- Scene transitions call `scene.stop()` on the originating scene after launching the target, preventing ghost-scene parallel execution.
 
 ### Core Stability Paths to Protect
 - Pause/resume/restart behavior.
@@ -206,4 +215,35 @@ When `ISSUE` is used, log:
 - Password-based progression flow removed.
 - Weapon progression moved to crate-based random unlocked pickups.
 - Pause menu includes main-menu return path.
+- QA pass logged: objective/pickup overlap readability validated in sectors 10-12 (non-spam, context-correct behavior).
+- Session tag: 2026-03-04 / QA-Overlap-LateSectors.
+- QA pass logged: late-game weapon feel validated (Spore Needlegun + Pulse Shotgun in sectors 10-12).
+- Session tag: 2026-03-04 / QA-WeaponFeel-LateSectors.
+- QA block closeout: no blockers found in this late-sector validation pass.
+- Regression pass logged: remap input capture safety verified (no leaked button actions in remap flow).
+- Regression pass logged: weapon crate pickup now fully reloads ammo and verified in playtest.
+- Regression pass logged: out-of-ammo hint readability and anti-spam cooldown verified.
+- Regression pass logged: sectors 5-12 medkit fairness tuning verified (including late-sector drought protection).
+- Session tag: 2026-03-04 / QA-Regression-Stability-Balance.
+- Session implementation summary (2026-03-04):
+  - Restored sector-password flow via settings menu with named + numeric formats.
+  - Fixed remap-gamepad input leakage (capture now blocks downstream menu action triggers).
+  - Tuned late-sector enemy pressure and pursuit stickiness for fairer sectors 7-12.
+  - Increased medkit fairness in sectors 5-12 (weighted chance + drought protection).
+  - Updated weapon-crate behavior to fully reload ammo on pickup.
+  - Added readable, cooldown-limited `OUT OF AMMO` hint on attempted fire at zero ammo.
+  - Added first-run tutorial guidance steps for sector 1 and one-pass completion tracking.
+  - Added subtle spore weave movement variation to improve enemy behavior variety.
+- Session tag: 2026-03-04 / Impl-Balance-UX-Variety.
 - Session docs consolidated into this single handbook.
+- Session implementation summary (2026-03-04 — input/scene stability):
+  - Fixed Pause → Main Menu full game lockout (root cause: ghost-scene parallel execution loop).
+    - `PauseScene.confirmSelection()` now calls `this.scene.stop()` after launching `StartScene`.
+    - `StartScene.startGameAtSector()` now calls `this.scene.stop()` after launching `GameScene`.
+    - Without these stops, both scenes kept running in parallel, causing `GameScene` to restart every debounce tick (≈160ms) while `StartScene` was still alive.
+  - Rewrote `StartScene` menu input model (arm-gate + edge-trigger):
+    - Removed: held-state confirm, `confirmInputArmed`, `blockMenuInputUntilRelease`, `forceConfirmArmAt`, `syncConfirmButtonStates()`, `updateConfirmInputArmState()`, `handleBlockedMenuInputRelease()`, `shouldSkipMenuProcessing()`, `processDirectionalMenuInput()`, `processConfirmMenuInput()`.
+    - Added: `inputArmed` flag (false on create, set true once all face buttons released), `prevConfirmPressed`/`prevBackPressed` edge trackers.
+    - Confirm and back now fire on press edge only; directional hold-scroll debounce unchanged.
+  - Build size reduced by ~1.3 kB (dead code removed).
+- Session tag: 2026-03-04 / Fix-SceneTransition-InputLock.

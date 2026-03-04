@@ -66,6 +66,7 @@ const config = {
   width: 1280,
   height: 720,
   backgroundColor: '#07100b',
+  pixelArt: true,
   input: {
     gamepad: true
   },

@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import {
-  clearCustomBindings,
   clearCustomGamepadBindings,
   GAMEPAD_ACTIONS,
   getControlConfig,
@@ -9,6 +8,7 @@ import {
   hasCustomBindings,
   setCustomGamepadBinding
 } from '../config/controls.js';
+import { resolveSectorPassword } from '../config/sectorPasswords.js';
 
 const MENU_STICK_DEADZONE = 0.5;
 
@@ -20,7 +20,7 @@ export class StartScene extends Phaser.Scene {
     this.settingsSelection = 0;
     this.remapSelection = 0;
     this.mainOptions = ['Start Run', 'Settings'];
-    this.settingsOptions = ['SFX Volume', 'Control Preset', 'Remap Gamepad', 'Reset Custom Binds', 'Back'];
+    this.settingsOptions = ['SFX Volume', 'Control Preset', 'Remap Gamepad', 'Sector Password', 'Reset Custom Binds', 'Back'];
     this.controlPresetOptions = [];
     this.awaitingBinding = null;
     this.awaitingBindReadyAt = 0;
@@ -28,24 +28,35 @@ export class StartScene extends Phaser.Scene {
     this.pendingRestoreMode = null;
     this.onGamepadDisconnected = null;
     this.detectedGamepadName = null;
-    this.previousGamepadButtons = {};
-    this.confirmInputArmed = false;
+    this.previousGamepadButtons = new Map();
+    this.inputArmed = false;
+    this.prevConfirmPressed = false;
+    this.prevBackPressed = false;
     this.mainMenuMessage = '';
     this.mainMenuMessageExpiresAt = 0;
   }
 
-  create() {
+  create(data = {}) {
+    if (this.input) {
+      this.input.enabled = true;
+      if (this.input.manager) {
+        this.input.manager.enabled = true;
+      }
+    }
+
     this.menuMode = 'main';
     this.mainSelection = 0;
     this.settingsSelection = 0;
     this.remapSelection = 0;
     this.awaitingBinding = null;
     this.pendingRestoreMode = null;
-    this.previousGamepadButtons = {};
-    this.confirmInputArmed = false;
+    this.previousGamepadButtons = new Map();
+    this.inputArmed = false;
+    this.prevConfirmPressed = false;
+    this.prevBackPressed = false;
     this.mainMenuMessage = '';
     this.mainMenuMessageExpiresAt = 0;
-    this.nextMenuInputAt = this.time.now + 220;
+    this.nextMenuInputAt = 0;
 
     this.initializeSettings();
     this.controlPresetOptions = getControlPresetOptions();
@@ -131,80 +142,74 @@ export class StartScene extends Phaser.Scene {
   }
 
   update() {
-    if (this.mainMenuMessage && this.time.now >= this.mainMenuMessageExpiresAt) {
-      this.mainMenuMessage = '';
-      this.mainMenuMessageExpiresAt = 0;
-      this.refreshView();
-    }
-
+    this.clearExpiredMainMenuMessage();
     this.refreshGamepadConnectionState();
-    this.updateConfirmInputArmState();
 
     if (this.tryCaptureGamepadBinding()) {
+      this.prevConfirmPressed = this.isGamepadConfirmPressed();
+      this.prevBackPressed = this.isGamepadBackPressed();
       return;
     }
 
-    const backPressed = this.confirmInputArmed && this.isGamepadBackPressed();
-    if (backPressed) {
+    const confirmPressed = this.isGamepadConfirmPressed();
+    const backPressed = this.isGamepadBackPressed();
+
+    if (!this.inputArmed) {
+      if (!confirmPressed && !backPressed) {
+        this.inputArmed = true;
+      }
+      this.prevConfirmPressed = confirmPressed;
+      this.prevBackPressed = backPressed;
+      return;
+    }
+
+    if (this.menuMode !== 'main' && backPressed && !this.prevBackPressed) {
+      this.prevConfirmPressed = confirmPressed;
+      this.prevBackPressed = backPressed;
       this.handleBackAction();
-      return;
-    }
-
-    if (this.awaitingBinding) {
       return;
     }
 
     if (this.consumeMenuInput(this.isGamepadUpPressed())) {
       this.moveSelection(-1);
     }
-
     if (this.consumeMenuInput(this.isGamepadDownPressed())) {
       this.moveSelection(1);
     }
-
     if (this.consumeMenuInput(this.isGamepadLeftPressed())) {
       this.adjustCurrentSetting(-1);
     }
-
     if (this.consumeMenuInput(this.isGamepadRightPressed())) {
       this.adjustCurrentSetting(1);
     }
 
-    const gamepadConfirm = this.confirmInputArmed && this.isGamepadConfirmPressed();
-    if (this.consumeMenuInput(gamepadConfirm)) {
+    if (confirmPressed && !this.prevConfirmPressed) {
       this.confirmSelection();
     }
+
+    this.prevConfirmPressed = confirmPressed;
+    this.prevBackPressed = backPressed;
   }
 
-  updateConfirmInputArmState() {
-    if (this.confirmInputArmed) {
+  clearExpiredMainMenuMessage() {
+    if (!this.mainMenuMessage || this.time.now < this.mainMenuMessageExpiresAt) {
       return;
     }
 
-    if (this.isAnyConfirmInputHeld()) {
-      this.syncConfirmButtonStates();
-      return;
+    this.mainMenuMessage = '';
+    this.mainMenuMessageExpiresAt = 0;
+    this.refreshView();
+  }
+
+  isAnyGamepadButtonHeld() {
+    const buttonCount = this.pad?.buttons?.length ?? this.getBrowserConnectedGamepad()?.buttons?.length ?? 0;
+    for (let index = 0; index < buttonCount; index += 1) {
+      if (this.isGamepadButtonPressed(index)) {
+        return true;
+      }
     }
 
-    this.confirmInputArmed = true;
-    this.syncConfirmButtonStates();
-  }
-
-  isAnyConfirmInputHeld() {
-    const pointerConfirmHeld = this.input?.activePointer?.isDown === true;
-    const controls = getControlConfig(this.registry);
-    const interactButton = controls?.gamepad?.interactButton ?? 0;
-    const gamepadConfirmHeld = this.isGamepadButtonPressed(interactButton);
-    const gamepadBackHeld = this.isGamepadButtonPressed(1);
-
-    return pointerConfirmHeld || gamepadConfirmHeld || gamepadBackHeld;
-  }
-
-  syncConfirmButtonStates() {
-    const controls = getControlConfig(this.registry);
-    const interactButton = controls?.gamepad?.interactButton ?? 0;
-    this.previousGamepadButtons[interactButton] = this.isGamepadButtonPressed(interactButton);
-    this.previousGamepadButtons[1] = this.isGamepadButtonPressed(1);
+    return false;
   }
 
   consumeMenuInput(isRequested) {
@@ -221,68 +226,120 @@ export class StartScene extends Phaser.Scene {
   }
 
   isGamepadUpPressed() {
-    return this.getGamepadAxisValue(1) >= MENU_STICK_DEADZONE;
+    return this.getGamepadAxisValue(1) >= MENU_STICK_DEADZONE || this.isGamepadButtonPressed(12);
   }
 
   isGamepadDownPressed() {
-    return this.getGamepadAxisValue(1) <= -MENU_STICK_DEADZONE;
+    return this.getGamepadAxisValue(1) <= -MENU_STICK_DEADZONE || this.isGamepadButtonPressed(13);
   }
 
   isGamepadLeftPressed() {
-    return this.getGamepadAxisValue(0) <= -MENU_STICK_DEADZONE;
+    return this.getGamepadAxisValue(0) <= -MENU_STICK_DEADZONE || this.isGamepadButtonPressed(14);
   }
 
   isGamepadRightPressed() {
-    return this.getGamepadAxisValue(0) >= MENU_STICK_DEADZONE;
+    return this.getGamepadAxisValue(0) >= MENU_STICK_DEADZONE || this.isGamepadButtonPressed(15);
   }
 
   isGamepadConfirmPressed() {
     const controls = getControlConfig(this.registry);
     const interactButton = controls?.gamepad?.interactButton ?? 0;
-    return this.isGamepadButtonJustPressed(interactButton);
+    const fallbackButtons = [0, 1, 2, 3];
+    const confirmCandidates = [interactButton, ...fallbackButtons.filter((button) => button !== interactButton)];
+    return this.isAnyGamepadButtonPressed(confirmCandidates);
   }
 
   isGamepadBackPressed() {
-    return this.isGamepadButtonJustPressed(1);
+    const controls = getControlConfig(this.registry);
+    const interactButton = controls?.gamepad?.interactButton ?? 0;
+    const backCandidates = [1, 2, 3, 0].filter((button) => button !== interactButton);
+    return this.isAnyGamepadButtonPressed(backCandidates);
   }
 
-  isGamepadButtonPressed(buttonIndex) {
-    if (this.pad && this.pad.buttons.length > buttonIndex) {
-      return this.pad.buttons[buttonIndex].pressed;
-    }
-
-    const browserPad = this.getBrowserConnectedGamepad();
-    if (!browserPad || !browserPad.buttons || browserPad.buttons.length <= buttonIndex) {
+  isAnyGamepadButtonPressed(buttonIndices) {
+    if (!Array.isArray(buttonIndices) || buttonIndices.length === 0) {
       return false;
     }
 
-    return !!browserPad.buttons[buttonIndex].pressed;
+    return buttonIndices.some((buttonIndex) => this.isGamepadButtonPressed(buttonIndex));
   }
 
-  isGamepadButtonJustPressed(buttonIndex) {
-    const pressedNow = this.isGamepadButtonPressed(buttonIndex);
-    const wasPressed = this.previousGamepadButtons[buttonIndex] === true;
-    this.previousGamepadButtons[buttonIndex] = pressedNow;
-    return pressedNow && !wasPressed;
-  }
+  isGamepadButtonPressed(buttonIndex) {
+    const normalizedButtonIndex = this.normalizeButtonIndex(buttonIndex);
+    if (normalizedButtonIndex === null) {
+      return false;
+    }
 
-  getGamepadAxisValue(axisIndex) {
-    if (this.pad && this.pad.axes.length > axisIndex) {
-      const axis = this.pad.axes[axisIndex];
-      if (typeof axis === 'number') {
-        return axis;
-      }
-      if (axis && typeof axis.getValue === 'function') {
-        return axis.getValue();
-      }
+    if (this.pad && this.pad.buttons.length > normalizedButtonIndex) {
+      const button = this.pad.buttons.at(normalizedButtonIndex);
+      return button?.pressed === true;
     }
 
     const browserPad = this.getBrowserConnectedGamepad();
-    if (!browserPad || !browserPad.axes || browserPad.axes.length <= axisIndex) {
+    if (!browserPad || !browserPad.buttons || browserPad.buttons.length <= normalizedButtonIndex) {
+      return false;
+    }
+
+    const browserButton = browserPad.buttons.at(normalizedButtonIndex);
+    return browserButton?.pressed === true;
+  }
+
+  isGamepadButtonJustPressed(buttonIndex) {
+    const normalizedButtonIndex = this.normalizeButtonIndex(buttonIndex);
+    if (normalizedButtonIndex === null) {
+      return false;
+    }
+
+    const pressedNow = this.isGamepadButtonPressed(buttonIndex);
+    const wasPressed = this.previousGamepadButtons.get(normalizedButtonIndex) === true;
+    this.previousGamepadButtons.set(normalizedButtonIndex, pressedNow);
+    return pressedNow && !wasPressed;
+  }
+
+  normalizeButtonIndex(buttonIndex) {
+    if (!Number.isInteger(buttonIndex) || buttonIndex < 0 || buttonIndex > 31) {
+      return null;
+    }
+
+    return buttonIndex;
+  }
+
+  normalizeAxisIndex(axisIndex) {
+    if (!Number.isInteger(axisIndex) || axisIndex < 0 || axisIndex > 7) {
+      return null;
+    }
+
+    return axisIndex;
+  }
+
+  getGamepadAxisValue(axisIndex) {
+    const normalizedAxisIndex = this.normalizeAxisIndex(axisIndex);
+    if (normalizedAxisIndex === null) {
       return 0;
     }
 
-    return Number(browserPad.axes[axisIndex]) || 0;
+    return (
+      this.readAxisValueFromPad(this.pad, normalizedAxisIndex)
+      ?? this.readAxisValueFromPad(this.getBrowserConnectedGamepad(), normalizedAxisIndex)
+      ?? 0
+    );
+  }
+
+  readAxisValueFromPad(pad, axisIndex) {
+    if (!pad || !pad.axes || pad.axes.length <= axisIndex) {
+      return null;
+    }
+
+    const axis = pad.axes.at(axisIndex);
+    if (typeof axis === 'number') {
+      return axis;
+    }
+
+    if (axis && typeof axis.getValue === 'function') {
+      return axis.getValue();
+    }
+
+    return Number(axis) || 0;
   }
 
   getBrowserConnectedGamepad() {
@@ -292,9 +349,9 @@ export class StartScene extends Phaser.Scene {
     }
 
     const pads = browserNavigator.getGamepads();
-    for (let index = 0; index < pads.length; index += 1) {
-      if (pads[index]) {
-        return pads[index];
+    for (const pad of pads) {
+      if (pad) {
+        return pad;
       }
     }
 
@@ -316,10 +373,6 @@ export class StartScene extends Phaser.Scene {
 
   onPointerDown() {
     if (this.awaitingBinding) {
-      return;
-    }
-
-    if (!this.confirmInputArmed) {
       return;
     }
 
@@ -382,7 +435,12 @@ export class StartScene extends Phaser.Scene {
     }
 
     if (this.settingsSelection === 3) {
-      clearCustomBindings(this.registry);
+      this.requestSectorPassword();
+      return;
+    }
+
+    if (this.settingsSelection === 4) {
+      clearCustomGamepadBindings(this.registry);
       this.refreshView();
       return;
     }
@@ -446,9 +504,37 @@ export class StartScene extends Phaser.Scene {
     const currentPreset = getControlPresetName(this.registry);
     const currentIndex = this.controlPresetOptions.findIndex((option) => option.value === currentPreset);
     const nextIndex = Phaser.Math.Wrap(currentIndex + direction, 0, this.controlPresetOptions.length);
-    const nextPreset = this.controlPresetOptions[nextIndex];
+    const nextPreset = this.controlPresetOptions.at(nextIndex);
+    if (!nextPreset) {
+      return;
+    }
+
     this.registry.set('controlPreset', nextPreset.value);
     this.refreshView();
+  }
+
+  requestSectorPassword() {
+    const promptFn = globalThis?.prompt;
+    if (typeof promptFn !== 'function') {
+      this.setMainMenuMessage('Password entry unavailable in this build.');
+      return;
+    }
+
+    const enteredPassword = promptFn('Enter sector password (ex: SPORE, S9, AIRLOCK-12):', '');
+    if (enteredPassword === null) {
+      return;
+    }
+
+    const targetSector = resolveSectorPassword(enteredPassword);
+    if (!targetSector) {
+      this.setMainMenuMessage('Invalid password.');
+      this.menuMode = 'main';
+      this.mainSelection = 0;
+      this.refreshView();
+      return;
+    }
+
+    this.startGameAtSector(targetSector);
   }
 
   beginBindingCapture() {
@@ -480,33 +566,94 @@ export class StartScene extends Phaser.Scene {
       action: selectedAction.value
     };
     this.awaitingBindReadyAt = this.time.now + 180;
+    this.inputArmed = false;
     this.refreshView();
   }
 
   tryCaptureGamepadBinding() {
-    if (!this.awaitingBinding || this.awaitingBinding.type !== 'gamepad') {
+    if (!this.isAwaitingGamepadBindingCapture()) {
       return false;
     }
 
-    if (this.time.now < this.awaitingBindReadyAt) {
+    if (!this.isBindingCaptureReady()) {
       return true;
     }
 
-    const buttonCount = this.pad?.buttons?.length ?? this.getBrowserConnectedGamepad()?.buttons?.length ?? 0;
-    for (let index = 0; index < buttonCount; index += 1) {
-      if (this.isGamepadButtonPressed(index)) {
-        setCustomGamepadBinding(this.registry, this.awaitingBinding.action, index);
-        this.awaitingBinding = null;
-        this.refreshView();
-        return true;
-      }
+    const capturedButtonIndex = this.getFirstPressedGamepadButtonIndex();
+    if (capturedButtonIndex !== null) {
+      this.completeGamepadBindingCapture(capturedButtonIndex);
     }
 
     return true;
   }
 
+  isAwaitingGamepadBindingCapture() {
+    return this.awaitingBinding?.type === 'gamepad';
+  }
+
+  isBindingCaptureReady() {
+    return this.time.now >= this.awaitingBindReadyAt;
+  }
+
+  getFirstPressedGamepadButtonIndex() {
+    const buttonCount = this.pad?.buttons?.length ?? this.getBrowserConnectedGamepad()?.buttons?.length ?? 0;
+    for (let index = 0; index < buttonCount; index += 1) {
+      if (this.isGamepadButtonPressed(index)) {
+        return index;
+      }
+    }
+
+    return null;
+  }
+
+  completeGamepadBindingCapture(buttonIndex) {
+    if (!this.awaitingBinding) {
+      return;
+    }
+
+    setCustomGamepadBinding(this.registry, this.awaitingBinding.action, buttonIndex);
+    this.awaitingBinding = null;
+    this.inputArmed = false;
+    this.nextMenuInputAt = this.time.now + 150;
+    this.refreshView();
+  }
+
   getGamepadActionDisplay(actionValue, gamepadConfig) {
-    return String(gamepadConfig[actionValue]);
+    if (!gamepadConfig || typeof gamepadConfig !== 'object') {
+      return 'Unbound';
+    }
+
+    switch (actionValue) {
+      case 'firePrimaryButton':
+        return String(gamepadConfig.firePrimaryButton);
+      case 'fireSecondaryButton':
+        return String(gamepadConfig.fireSecondaryButton);
+      case 'interactButton':
+        return String(gamepadConfig.interactButton);
+      case 'pauseButton':
+        return String(gamepadConfig.pauseButton);
+      default:
+        return 'Unbound';
+    }
+  }
+
+  getMenuTextLine(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= this.menuTexts.length) {
+      return null;
+    }
+
+    return this.menuTexts.at(index) ?? null;
+  }
+
+  renderMenuLine(index, text, isSelected) {
+    const menuText = this.getMenuTextLine(index);
+    if (!menuText) {
+      return;
+    }
+
+    menuText.setVisible(true);
+    menuText.setText(`${isSelected ? '▶ ' : ''}${text}`);
+    menuText.setColor(isSelected ? '#ffb8d6' : '#e7f2eb');
   }
 
   refreshView() {
@@ -528,9 +675,7 @@ export class StartScene extends Phaser.Scene {
     if (this.menuMode === 'main') {
       this.mainOptions.forEach((option, index) => {
         const selected = index === this.mainSelection;
-        this.menuTexts[index].setVisible(true);
-        this.menuTexts[index].setText(`${selected ? '▶ ' : ''}${option}`);
-        this.menuTexts[index].setColor(selected ? '#ffb8d6' : '#e7f2eb');
+        this.renderMenuLine(index, option, selected);
       });
 
       this.helpText.setText(this.mainMenuMessage || '');
@@ -543,15 +688,14 @@ export class StartScene extends Phaser.Scene {
         `SFX Volume: ${Math.round(sfxVolume * 100)}%`,
         `Control Preset: ${currentPresetLabel}`,
         'Remap Gamepad',
+        'Sector Password',
         `Reset Custom Binds (${customActive ? 'ON' : 'OFF'})`,
         'Back'
       ];
 
       settingLines.forEach((line, index) => {
         const selected = index === this.settingsSelection;
-        this.menuTexts[index].setVisible(true);
-        this.menuTexts[index].setText(`${selected ? '▶ ' : ''}${line}`);
-        this.menuTexts[index].setColor(selected ? '#ffb8d6' : '#e7f2eb');
+        this.renderMenuLine(index, line, selected);
       });
 
       this.helpText.setText('');
@@ -566,17 +710,17 @@ export class StartScene extends Phaser.Scene {
       const awaitingThisAction = this.awaitingBinding && this.awaitingBinding.action === action.value;
       const bindSuffix = awaitingThisAction ? '  [Press input...]' : '';
 
-      this.menuTexts[index].setVisible(true);
-      this.menuTexts[index].setText(`${selected ? '▶ ' : ''}${action.label}: ${binding}${bindSuffix}`);
-      this.menuTexts[index].setColor(selected ? '#ffb8d6' : '#e7f2eb');
+      this.renderMenuLine(index, `${action.label}: ${binding}${bindSuffix}`, selected);
     });
 
     const restoreIndex = actionList.length;
     const restoreSelected = restoreIndex === this.remapSelection;
     const restorePending = this.pendingRestoreMode === this.menuMode;
-    this.menuTexts[restoreIndex].setVisible(true);
-    this.menuTexts[restoreIndex].setText(`${restoreSelected ? '▶ ' : ''}Restore Defaults${restorePending ? '  [Press Confirm Again]' : ''}`);
-    this.menuTexts[restoreIndex].setColor(restoreSelected ? '#ffb8d6' : '#e7f2eb');
+    this.renderMenuLine(
+      restoreIndex,
+      `Restore Defaults${restorePending ? '  [Press Confirm Again]' : ''}`,
+      restoreSelected
+    );
 
     if (restorePending) {
       this.helpText.setText('Confirm again to restore all for this device  •  B Cancel');
@@ -599,12 +743,19 @@ export class StartScene extends Phaser.Scene {
   startGameAtSector(sectorIndex) {
     const normalizedSector = Math.max(1, Math.round(Number(sectorIndex) || 1));
 
-    if (!this.scene.isActive('GameScene')) {
-      this.registry.set('sectorIndex', normalizedSector);
-      this.scene.start('GameScene', {
-        sectorIndex: normalizedSector,
-        carryResources: false
-      });
+    if (this.scene.isActive('PauseScene') || this.scene.isPaused('PauseScene') || this.scene.isSleeping('PauseScene')) {
+      this.scene.stop('PauseScene');
     }
+
+    if (this.scene.isActive('GameScene') || this.scene.isPaused('GameScene') || this.scene.isSleeping('GameScene')) {
+      this.scene.stop('GameScene');
+    }
+
+    this.registry.set('sectorIndex', normalizedSector);
+    this.scene.start('GameScene', {
+      sectorIndex: normalizedSector,
+      carryResources: false
+    });
+    this.scene.stop();
   }
 }

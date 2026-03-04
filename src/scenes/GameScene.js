@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getControlConfig } from '../config/controls.js';
 import { DEBUG_TOOLS_ENABLED, isDebugFlagEnabled } from '../config/debug.js';
+import { buildAllTextures } from '../assets/TextureFactory.js';
 
 const WORLD_WIDTH = 2200;
 const WORLD_HEIGHT = 1400;
@@ -34,6 +35,10 @@ const NODE_OVERLAP_HINT_SCAN_INTERVAL_MS = 220;
 const NODE_OVERLAP_HINT_NODE_RADIUS_PX = 190;
 const NODE_OVERLAP_HINT_PICKUP_RADIUS_PX = 120;
 const NODE_OVERLAP_HINT_COOLDOWN_MS = 4200;
+const LATE_SECTOR_ENEMY_RELIEF_START = 7;
+const LATE_SECTOR_ENEMY_RELIEF_END = 12;
+const MEDKIT_DROUGHT_PROTECTION_START_SECTOR = 5;
+const OUT_OF_AMMO_HINT_COOLDOWN_MS = 900;
 
 // Objective node and enemy pressure scaling.
 const OBJECTIVE_NODE_BASE_HEALTH = 130;
@@ -482,6 +487,8 @@ export class GameScene extends Phaser.Scene {
     this.nextNodeOverlapHintAt = 0;
     this.nextNodeOverlapHintCheckAt = 0;
     this.reachableNodeGridCache = null;
+    this.pickupsSinceMedkit = 0;
+    this.nextOutOfAmmoHintAt = 0;
   }
 
   create(data = {}) {
@@ -514,6 +521,14 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    this.cameras.main.setZoom(1.6);
+
+    this.hudCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
+    this.hudCamera.setScroll(-99999, -99999);
+    this.hudCamera.setZoom(1);
+    this.hudElements.forEach((el) => {
+      this.cameras.main.ignore(el);
+    });
 
     this.events.on('shutdown', () => {
       if (this.input.gamepad) {
@@ -586,6 +601,8 @@ export class GameScene extends Phaser.Scene {
     this.state = 'playing';
     this.hasQueuedSectorTransition = false;
     this.hasQueuedGameOverTransition = false;
+    this.pickupsSinceMedkit = 0;
+    this.nextOutOfAmmoHintAt = 0;
   }
 
   resolveEquippedWeaponId(carriedWeaponId) {
@@ -610,69 +627,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   buildTextures() {
-    const graphics = this.add.graphics({ x: 0, y: 0 });
-
-    graphics.fillStyle(0xa7f95d, 1);
-    graphics.fillRect(0, 0, 24, 24);
-    graphics.generateTexture('player', 24, 24);
-
-    graphics.clear();
-    graphics.fillStyle(0xffc466, 1);
-    graphics.fillCircle(6, 6, 6);
-    graphics.generateTexture('bullet', 12, 12);
-
-    graphics.clear();
-    graphics.fillStyle(0x74d06e, 1);
-    graphics.fillEllipse(14, 10, 28, 20);
-    graphics.generateTexture('spore', 28, 20);
-
-    graphics.clear();
-    graphics.fillStyle(0x4ea14f, 1);
-    graphics.fillRoundedRect(0, 0, 34, 34, 8);
-    graphics.generateTexture('brute', 34, 34);
-
-    graphics.clear();
-    graphics.fillStyle(0xb7ff87, 1);
-    graphics.fillTriangle(0, 20, 20, 0, 40, 20);
-    graphics.generateTexture('stalker', 40, 20);
-
-    graphics.clear();
-    graphics.fillStyle(0x7d6dff, 1);
-    graphics.fillRect(0, 0, 22, 22);
-    graphics.fillStyle(0xc8c2ff, 1);
-    graphics.fillRect(8, 3, 6, 16);
-    graphics.fillRect(3, 8, 16, 6);
-    graphics.generateTexture('node', 22, 22);
-
-    graphics.clear();
-    graphics.fillStyle(0x71a2ff, 1);
-    graphics.fillRect(0, 0, 16, 16);
-    graphics.generateTexture('ammo', 16, 16);
-
-    graphics.clear();
-    graphics.fillStyle(0x8af7ff, 1);
-    graphics.fillRect(0, 0, 16, 16);
-    graphics.generateTexture('oxygen', 16, 16);
-
-    graphics.clear();
-    graphics.fillStyle(0xd83b4c, 1);
-    graphics.fillRect(0, 0, 16, 16);
-    graphics.fillStyle(0xfff1f3, 1);
-    graphics.fillRect(6, 3, 4, 10);
-    graphics.fillRect(3, 6, 10, 4);
-    graphics.generateTexture('medkit', 16, 16);
-
-    graphics.clear();
-    graphics.fillStyle(0xcab6ff, 1);
-    graphics.fillRoundedRect(0, 0, 18, 18, 5);
-    graphics.fillStyle(0x433273, 1);
-    graphics.fillRect(5, 4, 8, 10);
-    graphics.generateTexture('weaponPickup', 18, 18);
-
-    graphics.clear();
-    graphics.fillStyle(0xff5b8f, 1);
-    graphics.fillCircle(24, 24, 24);
-    graphics.destroy();
+    const layout = this.getSectorLayoutDefinition();
+    buildAllTextures(this, layout);
   }
 
   buildWorld() {
@@ -680,7 +636,7 @@ export class GameScene extends Phaser.Scene {
 
     const layout = this.getSectorLayoutDefinition();
 
-    this.add.rectangle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, layout.backgroundColor);
+    this.add.tileSprite(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, 'floorTile');
 
     for (let index = 0; index < 120; index += 1) {
       const x = Phaser.Math.Between(20, WORLD_WIDTH - 20);
@@ -699,7 +655,7 @@ export class GameScene extends Phaser.Scene {
 
     this.walls = this.physics.add.staticGroup();
     walls.forEach(([x, y, width, height]) => {
-      const wall = this.add.rectangle(x, y, width, height, layout.wallColor);
+      const wall = this.add.tileSprite(x, y, width, height, 'wallTile');
       this.physics.add.existing(wall, true);
       this.walls.add(wall);
     });
@@ -727,17 +683,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   buildPlayer() {
-    this.player = this.physics.add.sprite(120, 120, 'player');
+    this.player = this.physics.add.sprite(120, 120, 'player', 0);
     this.player.setCollideWorldBounds(true);
     this.player.setDamping(true);
     this.player.setDrag(0.003);
     this.player.setMaxVelocity(220, 220);
+    this.player.play('player_walk');
   }
 
   buildGroups() {
     this.projectiles = this.physics.add.group({
       classType: Phaser.Physics.Arcade.Image,
-      maxSize: 80,
+      maxSize: 120,
       runChildUpdate: false
     });
 
@@ -754,10 +711,10 @@ export class GameScene extends Phaser.Scene {
 
     const nodeHealth = this.getObjectiveNodeHealth();
     nodePositions.forEach(([x, y]) => {
-      const node = this.objectiveNodes.create(x, y, 'node');
+      const node = this.objectiveNodes.create(x, y, 'node', 0);
       node.setData('active', true);
       node.setData('health', nodeHealth);
-      node.setTint(0x8d78ff);
+      node.play('node_pulse');
     });
 
     const nodeCount = nodePositions.length;
@@ -954,8 +911,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   buildSafeRoom() {
-    this.safeRoom = this.add.rectangle(WORLD_WIDTH - 170, WORLD_HEIGHT - 170, 120, 120, 0x234f35, 0.35);
+    this.add.rectangle(WORLD_WIDTH - 170, WORLD_HEIGHT - 170, 128, 128, 0x4effa8, 0.12);
+    this.safeRoom = this.add.rectangle(WORLD_WIDTH - 170, WORLD_HEIGHT - 170, 120, 120, 0x1a5535, 0.3);
     this.physics.add.existing(this.safeRoom, true);
+    this.safeRoomBorder = this.add.rectangle(WORLD_WIDTH - 170, WORLD_HEIGHT - 170, 126, 126);
+    this.safeRoomBorder.setStrokeStyle(2, 0x4effa8, 0.5);
+    this.safeRoomBorder.setFillStyle();
+    this.tweens.add({
+      targets: this.safeRoomBorder,
+      alpha: { from: 0.3, to: 0.8 },
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
   }
 
   buildInput() {
@@ -1011,11 +980,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   isGamepadButtonPressed(buttonIndex) {
-    if (!this.pad || typeof buttonIndex !== 'number' || this.pad.buttons.length <= buttonIndex) {
+    if (typeof buttonIndex !== 'number') {
       return false;
     }
 
-    return this.pad.buttons[buttonIndex].pressed;
+    if (this.pad && this.pad.buttons.length > buttonIndex) {
+      return this.pad.buttons[buttonIndex].pressed;
+    }
+
+    const browserPad = this.getBrowserConnectedGamepad();
+    if (!browserPad || !browserPad.buttons || browserPad.buttons.length <= buttonIndex) {
+      return false;
+    }
+
+    return browserPad.buttons[buttonIndex].pressed;
   }
 
   isGamepadButtonJustPressed(buttonIndex) {
@@ -1031,20 +1009,123 @@ export class GameScene extends Phaser.Scene {
 
   buildHud() {
     this.sound.volume = this.registry.get('sfxVolume') ?? 0.7;
+    this.hudElements = [];
+    const sw = this.scale.width;
 
-    const style = { fontFamily: 'Arial', fontSize: '24px', color: '#ddf8d4' };
-    this.hud.resources = this.add.text(16, 16, '', style).setScrollFactor(0).setDepth(10).setLineSpacing(4);
-    this.hud.objectives = this.add
-      .text(this.scale.width - 16, 16, '', {
-        fontFamily: 'Arial',
-        fontSize: '22px',
-        color: '#ddf8d4',
-        align: 'right'
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(10)
-      .setLineSpacing(4);
+    const addHudEl = (el) => { this.hudElements.push(el); return el; };
+
+    // ---- LEFT PANEL: Stats ----
+    addHudEl(this.add.rectangle(0, 0, 240, 162, 0x0a1210, 0.75)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
+    // Left panel border
+    addHudEl(this.add.rectangle(240, 0, 2, 162, 0x3dff8a, 0.25)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
+    addHudEl(this.add.rectangle(0, 162, 242, 2, 0x3dff8a, 0.25)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
+
+    // Sector label
+    this.hud.sectorLabel = addHudEl(this.add.text(14, 8, '', {
+      fontFamily: 'monospace', fontSize: '13px', color: '#5aff9a', fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(101));
+
+    // Weapon label
+    this.hud.weaponLabel = addHudEl(this.add.text(14, 26, '', {
+      fontFamily: 'monospace', fontSize: '12px', color: '#c0d8cc'
+    }).setScrollFactor(0).setDepth(101));
+
+    // Health bar
+    addHudEl(this.add.text(14, 48, 'HP', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#88aa88'
+    }).setScrollFactor(0).setDepth(101));
+    this.hud.healthBarBg = addHudEl(this.add.rectangle(40, 50, 186, 12, 0x1a0a0a)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(101));
+    this.hud.healthBarFill = addHudEl(this.add.rectangle(41, 51, 184, 10, 0x44cc44)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(102));
+    this.hud.healthBarBorder = addHudEl(this.add.rectangle(40, 50, 186, 12)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(102).setStrokeStyle(1, 0x44cc44, 0.5).setFillStyle());
+    this.hud.healthText = addHudEl(this.add.text(133, 49, '', {
+      fontFamily: 'monospace', fontSize: '10px', color: '#ffffff'
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(103));
+
+    // Ammo bar
+    addHudEl(this.add.text(14, 70, '', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#88aacc'
+    }).setScrollFactor(0).setDepth(101));
+    this.hud.ammoBarLabel = this.hudElements[this.hudElements.length - 1];
+    this.hud.ammoBarBg = addHudEl(this.add.rectangle(40, 72, 186, 12, 0x0a0a1a)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(101));
+    this.hud.ammoBarFill = addHudEl(this.add.rectangle(41, 73, 184, 10, 0x5588cc)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(102));
+    this.hud.ammoBarBorder = addHudEl(this.add.rectangle(40, 72, 186, 12)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(102).setStrokeStyle(1, 0x5588cc, 0.5).setFillStyle());
+    this.hud.ammoText = addHudEl(this.add.text(133, 71, '', {
+      fontFamily: 'monospace', fontSize: '10px', color: '#ffffff'
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(103));
+
+    // Oxygen bar
+    addHudEl(this.add.text(14, 92, 'O\u2082', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#88cccc'
+    }).setScrollFactor(0).setDepth(101));
+    this.hud.oxyBarBg = addHudEl(this.add.rectangle(40, 94, 186, 12, 0x0a1a1a)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(101));
+    this.hud.oxyBarFill = addHudEl(this.add.rectangle(41, 95, 184, 10, 0x44aaaa)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(102));
+    this.hud.oxyBarBorder = addHudEl(this.add.rectangle(40, 94, 186, 12)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(102).setStrokeStyle(1, 0x44aaaa, 0.5).setFillStyle());
+    this.hud.oxyText = addHudEl(this.add.text(133, 93, '', {
+      fontFamily: 'monospace', fontSize: '10px', color: '#ffffff'
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(103));
+
+    // Contamination bar
+    addHudEl(this.add.text(14, 114, 'CTM', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#cc88aa'
+    }).setScrollFactor(0).setDepth(101));
+    this.hud.ctmBarBg = addHudEl(this.add.rectangle(40, 116, 186, 12, 0x1a0a14)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(101));
+    this.hud.ctmBarFill = addHudEl(this.add.rectangle(41, 117, 0, 10, 0xcc4488)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(102));
+    this.hud.ctmBarBorder = addHudEl(this.add.rectangle(40, 116, 186, 12)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(102).setStrokeStyle(1, 0xcc4488, 0.3).setFillStyle());
+    this.hud.ctmText = addHudEl(this.add.text(133, 115, '', {
+      fontFamily: 'monospace', fontSize: '10px', color: '#ffffff'
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(103));
+
+    // Debug text placeholder (only written when debug enabled)
+    this.hud.debugText = addHudEl(this.add.text(14, 138, '', {
+      fontFamily: 'monospace', fontSize: '10px', color: '#aaccaa'
+    }).setScrollFactor(0).setDepth(101));
+
+    // ---- RIGHT PANEL: Objectives ----
+    addHudEl(this.add.rectangle(sw, 0, 280, 120, 0x0a1210, 0.75)
+      .setOrigin(1, 0).setScrollFactor(0).setDepth(100));
+    // Right panel border
+    addHudEl(this.add.rectangle(sw - 280, 0, 2, 120, 0x3dff8a, 0.25)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
+    addHudEl(this.add.rectangle(sw - 280, 120, 282, 2, 0x3dff8a, 0.25)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
+
+    addHudEl(this.add.text(sw - 14, 8, 'OBJECTIVES', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#5aff9a', fontStyle: 'bold', align: 'right'
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
+
+    this.hud.obj1 = addHudEl(this.add.text(sw - 14, 28, '', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#c0d8cc', align: 'right'
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
+    this.hud.obj2 = addHudEl(this.add.text(sw - 14, 48, '', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#c0d8cc', align: 'right'
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
+    this.hud.obj3 = addHudEl(this.add.text(sw - 14, 68, '', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#c0d8cc', align: 'right'
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
+
+    // Minimap area hint (bottom-right)
+    this.hud.extractHint = addHudEl(this.add.text(sw - 14, 92, '', {
+      fontFamily: 'monospace', fontSize: '10px', color: '#4effa8', align: 'right'
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
+
+    // We also keep a combined text ref for back-compat with debug
+    this.hud.resources = { setText: () => {} };
+    this.hud.objectives = { setText: () => {}, setColor: () => {} };
   }
 
   configureCollisions() {
@@ -1120,6 +1201,11 @@ export class GameScene extends Phaser.Scene {
     if (movementVector.lengthSq() > 0) {
       this.facingDirection.copy(movementVector).normalize();
       this.player.rotation = this.facingDirection.angle();
+      if (!this.player.anims.isPlaying || this.player.anims.currentAnim?.key !== 'player_walk') {
+        this.player.play('player_walk');
+      }
+    } else if (!this.player.anims.isPlaying || this.player.anims.currentAnim?.key !== 'player_idle') {
+      this.player.play('player_idle');
     }
 
     movementVector.normalize().scale(speed);
@@ -1201,10 +1287,37 @@ export class GameScene extends Phaser.Scene {
 
     const fireInputActive = this.isFireInputActive(pointer);
     if (fireInputActive) {
+      if (this.shouldShowOutOfAmmoHint()) {
+        this.showOutOfAmmoHint(time);
+        return fireInputActive;
+      }
+
       this.fireCurrentWeapon(time, this.facingDirection);
     }
 
     return fireInputActive;
+  }
+
+  shouldShowOutOfAmmoHint() {
+    const currentWeapon = this.getCurrentWeapon();
+    if (!currentWeapon || !this.isAmmoBasedWeapon(currentWeapon.id)) {
+      return false;
+    }
+
+    return this.resources.ammo <= 0;
+  }
+
+  isAmmoBasedWeapon(weaponId) {
+    return weaponId === 'shivPistol' || weaponId === 'sporeNeedlegun' || weaponId === 'pulseShotgun';
+  }
+
+  showOutOfAmmoHint(time) {
+    if (time < this.nextOutOfAmmoHintAt) {
+      return;
+    }
+
+    this.nextOutOfAmmoHintAt = time + OUT_OF_AMMO_HINT_COOLDOWN_MS;
+    this.showFloatingPickupText('OUT OF AMMO', '#ff8ea1', this.player.x, this.player.y - 34, 680);
   }
 
   isFireInputActive(pointer) {
@@ -1338,14 +1451,18 @@ export class GameScene extends Phaser.Scene {
 
   firePulseShotgun(time, direction) {
     const profile = this.getPulseShotgunProfile();
-    if (time < this.nextFireAt || this.resources.ammo < profile.ammoCost) {
+    if (time < this.nextFireAt || this.resources.ammo <= 0) {
       return;
     }
 
-    this.resources.ammo = Math.max(0, this.resources.ammo - profile.ammoCost);
+    const ammoToSpend = Math.min(this.resources.ammo, profile.ammoCost);
+    const pelletScale = ammoToSpend / profile.ammoCost;
+    const pelletCount = Math.max(1, Math.round(profile.pelletCount * pelletScale));
+
+    this.resources.ammo = Math.max(0, this.resources.ammo - ammoToSpend);
     this.nextFireAt = time + profile.cooldownMs;
 
-    for (let pelletIndex = 0; pelletIndex < profile.pelletCount; pelletIndex += 1) {
+    for (let pelletIndex = 0; pelletIndex < pelletCount; pelletIndex += 1) {
       const spread = Phaser.Math.FloatBetween(-profile.spread, profile.spread);
       const pelletDirection = direction.clone().rotate(spread);
 
@@ -1468,20 +1585,45 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      const direction = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y).normalize();
+      const enemyType = enemy.getData('type') || 'spore';
+      const distanceToPlayer = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+      const direction = this.getEnemyPursuitDirection(enemy, enemyType, distanceToPlayer, time);
       const speed = enemy.getData('speed');
+      const pursuitFactor = this.getEnemyPursuitFactor(enemyType, distanceToPlayer);
+      const effectiveSpeed = speed * pursuitFactor;
 
-      if (enemy.getData('type') === 'stalker' && Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y) > 320) {
+      if (enemyType === 'stalker' && distanceToPlayer > 320) {
         enemy.setAlpha(0.4);
       } else {
         enemy.setAlpha(1);
       }
 
-      enemy.setVelocity(direction.x * speed, direction.y * speed);
+      enemy.setVelocity(direction.x * effectiveSpeed, direction.y * effectiveSpeed);
     });
 
   }
 
+
+  getEnemyPursuitDirection(enemy, enemyType, distanceToPlayer, time) {
+    const toPlayer = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y);
+    if (toPlayer.lengthSq() === 0) {
+      return new Phaser.Math.Vector2(0, 0);
+    }
+
+    const directDirection = toPlayer.normalize();
+    if (enemyType !== 'spore' || distanceToPlayer < 90) {
+      return directDirection;
+    }
+
+    const movementSeed = Number(enemy.getData('movementSeed')) || 0;
+    const weavePhase = time * 0.004 + movementSeed * Math.PI * 2;
+    const reliefScalar = this.getLateSectorEnemyReliefScalar();
+    const weaveIntensity = 0.18 + reliefScalar * 0.05;
+    const lateralDirection = new Phaser.Math.Vector2(-directDirection.y, directDirection.x)
+      .scale(Math.sin(weavePhase) * weaveIntensity);
+
+    return directDirection.add(lateralDirection).normalize();
+  }
   getEnemyMinSpawnDistance(time) {
     if (time - this.runStartedAt <= EARLY_GAME_WINDOW_MS) {
       return EARLY_MIN_SPAWN_DISTANCE;
@@ -1526,15 +1668,21 @@ export class GameScene extends Phaser.Scene {
     const spawnPosition = this.getSpawnPositionAwayFromPlayer(minDistanceFromPlayer, useForwardSector);
     const type = this.getEnemyTypeByRoll(Phaser.Math.Between(1, 100));
 
-    const enemy = this.enemies.create(spawnPosition.x, spawnPosition.y, type);
+    const enemy = this.enemies.create(spawnPosition.x, spawnPosition.y, type, 0);
     enemy.setCollideWorldBounds(true);
     enemy.clearTint();
+
+    const enemyAnimKeys = { spore: 'spore_pulse', brute: 'brute_lumber', stalker: 'stalker_skitter' };
+    if (enemyAnimKeys[type]) {
+      enemy.play(enemyAnimKeys[type]);
+    }
 
     const enemyStats = this.getEnemyStats(type);
     enemy.health = enemyStats.health;
     enemy.setData('speed', enemyStats.speed);
 
     enemy.setData('type', type);
+    enemy.setData('movementSeed', Phaser.Math.FloatBetween(-1, 1));
     this.spawnedEnemyCount += 1;
   }
 
@@ -1633,36 +1781,69 @@ export class GameScene extends Phaser.Scene {
 
   getEnemyStats(type) {
     const progression = this.getSectorProgressScalar();
+    const relief = this.getLateSectorEnemyReliefScalar();
     const healthMultiplier = 1 + progression * 0.45;
+    const speedReliefByType = {
+      spore: 12,
+      brute: 10,
+      stalker: 18
+    };
 
     const statsByType = {
       spore: {
         health: Math.round(40 * healthMultiplier + progression * 6),
-        speed: Math.round(82 + this.waveLevel * 3 + progression * 14)
+        speed: Math.round(82 + this.waveLevel * 3 + progression * 14 - relief * speedReliefByType.spore)
       },
       brute: {
         health: Math.round(80 * healthMultiplier + progression * 12),
-        speed: Math.round(62 + this.waveLevel * 2 + progression * 10)
+        speed: Math.round(62 + this.waveLevel * 2 + progression * 10 - relief * speedReliefByType.brute)
       },
       stalker: {
         health: Math.round(48 * healthMultiplier + progression * 8),
-        speed: Math.round(118 + this.waveLevel * 4 + progression * 18)
+        speed: Math.round(118 + this.waveLevel * 4 + progression * 18 - relief * speedReliefByType.stalker)
       }
     };
+
+    statsByType.spore.speed = Math.max(70, statsByType.spore.speed);
+    statsByType.brute.speed = Math.max(54, statsByType.brute.speed);
+    statsByType.stalker.speed = Math.max(96, statsByType.stalker.speed);
 
     return statsByType[type] || statsByType.spore;
   }
 
+  getLateSectorEnemyReliefScalar() {
+    return Phaser.Math.Clamp(
+      (this.sectorIndex - LATE_SECTOR_ENEMY_RELIEF_START) / (LATE_SECTOR_ENEMY_RELIEF_END - LATE_SECTOR_ENEMY_RELIEF_START),
+      0,
+      1
+    );
+  }
+
+  getEnemyPursuitFactor(enemyType, distanceToPlayer) {
+    const relief = this.getLateSectorEnemyReliefScalar();
+    const comfortDistanceByType = {
+      spore: 86,
+      brute: 96,
+      stalker: 106
+    };
+
+    const comfortDistance = comfortDistanceByType[enemyType] ?? 88;
+    const reliefAdjustedComfortDistance = comfortDistance + relief * 16;
+    const closeRangeFloor = 28;
+
+    const normalizedRange = Phaser.Math.Clamp(
+      (distanceToPlayer - closeRangeFloor) / (reliefAdjustedComfortDistance - closeRangeFloor),
+      0,
+      1
+    );
+
+    const minPursuitSpeedFactor = 0.52 - relief * 0.12;
+    return Phaser.Math.Linear(minPursuitSpeedFactor, 1, normalizedRange);
+  }
+
   spawnPickup() {
     const weaponPickup = this.createWeaponPickupDefinition();
-    const pickupTypeRoll = Phaser.Math.Between(1, 100);
-    const pickupType = weaponPickup && pickupTypeRoll <= Math.round(this.getWeaponPickupChance() * 100)
-      ? 'weapon'
-      : pickupTypeRoll <= 60
-        ? 'ammo'
-        : pickupTypeRoll <= 85
-          ? 'oxygen'
-          : 'medkit';
+    const pickupType = this.getNextPickupType(weaponPickup);
     const spawnPosition = this.getValidPickupSpawnPosition();
     if (!spawnPosition) {
       return;
@@ -1672,18 +1853,62 @@ export class GameScene extends Phaser.Scene {
     const pickup = this.pickups.create(
       spawnPosition.x,
       spawnPosition.y,
-      pickupTexture
+      pickupTexture,
+      0
     );
+    pickup.play(`${pickupTexture}_glow`);
 
     pickup.setData('type', pickupType);
     if (pickupType === 'weapon' && weaponPickup) {
       pickup.setData('weaponId', weaponPickup.weaponId);
     }
+
+    if (pickupType === 'medkit') {
+      this.pickupsSinceMedkit = 0;
+    } else {
+      this.pickupsSinceMedkit += 1;
+    }
+
     this.time.delayedCall(this.getPickupLifetimeMs(), () => {
       if (pickup.active) {
         pickup.disableBody(true, true);
       }
     });
+  }
+
+  getNextPickupType(weaponPickup) {
+    if (this.shouldForceMedkitPickup()) {
+      return 'medkit';
+    }
+
+    const pickupTypeRoll = Phaser.Math.FloatBetween(0, 1);
+    if (weaponPickup && pickupTypeRoll <= this.getWeaponPickupChance()) {
+      return 'weapon';
+    }
+
+    const medkitChance = this.getMedkitPickupChance();
+    const oxygenChance = 0.25;
+    const resourceRoll = Phaser.Math.FloatBetween(0, 1);
+
+    if (resourceRoll <= medkitChance) {
+      return 'medkit';
+    }
+
+    if (resourceRoll <= medkitChance + oxygenChance) {
+      return 'oxygen';
+    }
+
+    return 'ammo';
+  }
+
+  shouldForceMedkitPickup() {
+    if (this.sectorIndex < MEDKIT_DROUGHT_PROTECTION_START_SECTOR) {
+      return false;
+    }
+
+    const sectorScalar = Phaser.Math.Clamp((this.sectorIndex - MEDKIT_DROUGHT_PROTECTION_START_SECTOR) / 7, 0, 1);
+    const maxDryStreak = Math.round(4 - sectorScalar * 2);
+    return this.pickupsSinceMedkit >= Math.max(2, maxDryStreak);
   }
 
   createWeaponPickupDefinition() {
@@ -1703,6 +1928,13 @@ export class GameScene extends Phaser.Scene {
   getWeaponPickupChance() {
     const progressionBonus = this.getSectorProgressScalar() * 0.08;
     return Phaser.Math.Clamp(WEAPON_PICKUP_BASE_CHANCE + progressionBonus, WEAPON_PICKUP_BASE_CHANCE, 0.22);
+  }
+
+  getMedkitPickupChance() {
+    const medkitBaseline = 0.18;
+    const sectorReliefScalar = Phaser.Math.Clamp((this.sectorIndex - 5) / 7, 0, 1);
+    const lateSectorBonus = 0.14 * sectorReliefScalar;
+    return Phaser.Math.Clamp(medkitBaseline + lateSectorBonus, medkitBaseline, 0.32);
   }
 
   getValidPickupSpawnPosition() {
@@ -1778,11 +2010,14 @@ export class GameScene extends Phaser.Scene {
 
     enemy.health -= totalDamage;
     this.showFloatingPickupText(`-${Math.ceil(totalDamage)}`, '#ffd48f', enemy.x, enemy.y - 18);
+    this.spawnParticleEffect(enemy.x, enemy.y, 'spark', 'spark_burst');
+
     if (enemy.health > 0) {
       this.showFloatingPickupText(`${Math.ceil(enemy.health)} HP`, '#ffe6ea', enemy.x, enemy.y - 34);
     }
 
     if (enemy.health <= 0) {
+      this.spawnParticleEffect(enemy.x, enemy.y, 'puff', 'puff_fade');
       enemy.disableBody(true, true);
     }
   }
@@ -1921,6 +2156,8 @@ export class GameScene extends Phaser.Scene {
         this.equippedWeaponId = weapon.id;
       }
 
+      this.resources.ammo = 100;
+
       if (weapon) {
         pickupText = `Weapon Crate: ${weapon.label}`;
       } else {
@@ -2054,6 +2291,13 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  spawnParticleEffect(x, y, textureKey, animKey) {
+    const particle = this.add.sprite(x, y, textureKey, 0);
+    particle.setDepth(8);
+    particle.play(animKey);
+    particle.once('animationcomplete', () => particle.destroy());
+  }
+
   updateObjectiveState() {
     this.objective.nodesRemaining = this.getActiveObjectiveNodeCount();
 
@@ -2102,41 +2346,82 @@ export class GameScene extends Phaser.Scene {
 
   updateHud() {
     const weapon = this.getCurrentWeapon();
-    const ammoLabel = this.getWeaponAmmoLabel(weapon.id);
     const nodesRemaining = this.getActiveObjectiveNodeCount();
     const aliensRemaining = this.enemies.countActive(true);
     const nodesComplete = nodesRemaining === 0;
     const aliensComplete = nodesComplete && aliensRemaining === 0;
     const extractionReady = aliensComplete;
-    const hudLines = [
-      `Sector: ${this.sectorIndex}`,
-      `HP: ${Math.ceil(this.resources.health)}`,
-      `Weapon: ${weapon.label}`,
-      `${ammoLabel}: ${this.getWeaponAmmoValue(weapon.id)}`
-    ];
 
+    // Sector & weapon labels
+    this.hud.sectorLabel.setText(`SECTOR ${this.sectorIndex}`);
+    this.hud.weaponLabel.setText(weapon.label);
+
+    // Health bar
+    const healthPct = Phaser.Math.Clamp(this.resources.health / 100, 0, 1);
+    this.hud.healthBarFill.width = Math.round(184 * healthPct);
+    this.hud.healthText.setText(`${Math.ceil(this.resources.health)}`);
+    if (healthPct > 0.5) {
+      this.hud.healthBarFill.setFillStyle(0x44cc44);
+      this.hud.healthBarBorder.setStrokeStyle(1, 0x44cc44, 0.5);
+    } else if (healthPct > 0.25) {
+      this.hud.healthBarFill.setFillStyle(0xcccc44);
+      this.hud.healthBarBorder.setStrokeStyle(1, 0xcccc44, 0.5);
+    } else {
+      this.hud.healthBarFill.setFillStyle(0xcc4444);
+      this.hud.healthBarBorder.setStrokeStyle(1, 0xcc4444, 0.5);
+    }
+
+    // Ammo / fuel / heat bar
+    const ammoLabel = this.getWeaponAmmoLabel(weapon.id);
+    const ammoValue = this.getWeaponAmmoValue(weapon.id);
+    const ammoMax = this.getWeaponAmmoMax(weapon.id);
+    const isHeatWeapon = weapon.id === 'uvArcCutter';
+    const ammoPct = isHeatWeapon
+      ? Phaser.Math.Clamp(1 - ammoValue / ammoMax, 0, 1)
+      : Phaser.Math.Clamp(ammoValue / ammoMax, 0, 1);
+    this.hud.ammoBarLabel.setText(ammoLabel.substring(0, 3).toUpperCase());
+    this.hud.ammoBarFill.width = Math.round(184 * ammoPct);
+    this.hud.ammoText.setText(isHeatWeapon ? `${ammoMax - ammoValue}` : `${ammoValue}`);
+    const ammoColor = weapon.id === 'incineratorCarbine' ? 0xff7a44
+      : isHeatWeapon ? 0x44ccff : 0x5588cc;
+    this.hud.ammoBarFill.setFillStyle(ammoColor);
+    this.hud.ammoBarBorder.setStrokeStyle(1, ammoColor, 0.5);
+
+    // Oxygen bar
+    const oxyPct = Phaser.Math.Clamp(this.resources.oxygen / 100, 0, 1);
+    this.hud.oxyBarFill.width = Math.round(184 * oxyPct);
+    this.hud.oxyText.setText(`${Math.ceil(this.resources.oxygen)}`);
+
+    // Contamination bar
+    const ctmPct = Phaser.Math.Clamp(this.resources.contamination / 100, 0, 1);
+    this.hud.ctmBarFill.width = Math.round(184 * ctmPct);
+    this.hud.ctmText.setText(ctmPct > 0.01 ? `${Math.ceil(this.resources.contamination)}` : '');
+
+    // Objectives
+    const checkOn = '\u25c9';
+    const checkOff = '\u25cb';
+    this.hud.obj1.setText(`${nodesComplete ? checkOn : checkOff} Nodes (${nodesRemaining} left)`);
+    this.hud.obj1.setColor(nodesComplete ? '#5aff9a' : '#c0d8cc');
+    this.hud.obj2.setText(`${aliensComplete ? checkOn : checkOff} Hostiles (${aliensRemaining})`);
+    this.hud.obj2.setColor(aliensComplete ? '#5aff9a' : '#c0d8cc');
+    this.hud.obj3.setText(`${extractionReady ? checkOn : checkOff} Extract`);
+    this.hud.obj3.setColor(extractionReady ? '#5aff9a' : '#c0d8cc');
+
+    this.hud.extractHint.setText(extractionReady ? 'GO TO SAFE ROOM' : '');
+
+    // Debug overlay
     if (this.gameplayTuningDebugEnabled) {
       const activeNodes = this.getActiveObjectiveNodeCount();
       const aliveEnemies = this.enemies.countActive(true);
       const maxEnemies = this.getMaxActiveEnemies(activeNodes);
       const nextPickupInMs = Math.max(0, this.nextResourceSpawnAt - this.time.now);
-
-      hudLines.push(
-        `DBG Nodes ${activeNodes}/${this.objective.required} HP:${this.getObjectiveNodeHealth()}`,
-        `DBG Enemies ${aliveEnemies}/${maxEnemies} Wave:${this.waveLevel.toFixed(2)}`,
-        `DBG Clearance ${this.getEnemyNodeSpawnClearancePx()} Pickup ${Math.ceil(nextPickupInMs / 1000)}s/${Math.ceil(this.getPickupLifetimeMs() / 1000)}s`,
-        `DBG Layout ${this.getSectorTemplateIndex() + 1}/12 Band:${this.getSectorBandIndex() + 1}`
-      );
+      this.hud.debugText.setText([
+        `DBG N:${activeNodes}/${this.objective.required} E:${aliveEnemies}/${maxEnemies} W:${this.waveLevel.toFixed(1)}`,
+        `DBG Clr:${this.getEnemyNodeSpawnClearancePx()} Pkp:${Math.ceil(nextPickupInMs / 1000)}s L:${this.getSectorTemplateIndex() + 1}/12`
+      ]);
+    } else {
+      this.hud.debugText.setText('');
     }
-
-    this.hud.resources.setText(hudLines);
-    this.hud.objectives.setColor('#ddf8d4');
-    this.hud.objectives.setText([
-      'Objectives',
-      `${nodesComplete ? '[x]' : '[ ]'} Disable infestation nodes (${nodesRemaining} left)`,
-      `${aliensComplete ? '[x]' : '[ ]'} Eliminate hostiles (${aliensRemaining} left)`,
-      `${extractionReady ? '[x]' : '[ ]'} Reach extraction zone`
-    ]);
   }
 
   getWeaponAmmoLabel(weaponId) {
@@ -2157,6 +2442,16 @@ export class GameScene extends Phaser.Scene {
       return Math.ceil(this.resources.uvHeat);
     }
     return Math.ceil(this.resources.ammo);
+  }
+
+  getWeaponAmmoMax(weaponId) {
+    if (weaponId === 'incineratorCarbine') {
+      return 120;
+    }
+    if (weaponId === 'uvArcCutter') {
+      return MAX_UV_HEAT;
+    }
+    return 180;
   }
 
   updateObjectiveText() {
