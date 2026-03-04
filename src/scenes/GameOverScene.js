@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { stopBackgroundMusic } from '../assets/MusicFactory.js';
 
 const GAMEPAD_CONFIRM_BUTTON = 0;
 const GAMEPAD_MENU_UP_BUTTON = 12;
@@ -58,6 +59,7 @@ export class GameOverScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.refreshMenuSelection();
+    stopBackgroundMusic(this);
   }
 
   update() {

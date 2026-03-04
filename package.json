@@ -1,6 +1,6 @@
 {
-  "name": "prisoner-starship-bloom",
-  "version": "0.1.0",
+  "name": "airlock-the-oncoming-swarm",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "phaser": "^3.90.0"
+    "jimp": "^1.6.0",
+    "phaser": "^3.90.0",
+    "pngjs": "^7.0.0",
+    "puppeteer": "^24.38.0"
   },
   "devDependencies": {
     "vite": "^7.1.3"

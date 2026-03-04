@@ -1,0 +1,18 @@
+{
+  "title": "Airlock: The Oncoming Swarm",
+  "short_text": "Survive the oncoming swarm in this intense web-based arcade shooter.",
+  "classification": "game",
+  "kind": "html",
+  "pricing": "free",
+  "platforms": ["windows", "mac", "linux"],
+  "genre": "shooter",
+  "tags": [
+    "arcade",
+    "webbroswer",
+    "phaser",
+    "procedural-audio",
+    "sci-fi",
+    "action",
+    "2d"
+  ]
+}

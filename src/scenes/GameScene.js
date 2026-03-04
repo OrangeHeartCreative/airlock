@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { getControlConfig } from '../config/controls.js';
 import { DEBUG_TOOLS_ENABLED, isDebugFlagEnabled } from '../config/debug.js';
 import { buildAllTextures } from '../assets/TextureFactory.js';
+import { buildAllSounds } from '../assets/SoundFactory.js';
+import { startFullMusic } from '../assets/MusicFactory.js';
 
 const WORLD_WIDTH = 2200;
 const WORLD_HEIGHT = 1400;
@@ -51,9 +53,9 @@ const ENEMY_NODE_SPAWN_CLEARANCE_BONUS_PER_SECTOR = 8;
 const ENEMY_NODE_SPAWN_CLEARANCE_MAX_PX = 210;
 
 // Pickup and progression timing.
-const PICKUP_BASE_LIFETIME_MS = 9000;
-const PICKUP_LIFETIME_BONUS_PER_SECTOR_MS = 700;
-const PICKUP_MAX_LIFETIME_MS = 13000;
+const PICKUP_BASE_LIFETIME_MS = 14000;
+const PICKUP_LIFETIME_BONUS_PER_SECTOR_MS = 900;
+const PICKUP_MAX_LIFETIME_MS = 22000;
 const OBJECTIVE_NODE_WALL_CLEARANCE_PX = 52;
 const OBJECTIVE_NODE_START_CLEARANCE_PX = 200;
 const OBJECTIVE_NODE_MIN_SPACING_PX = 220;
@@ -516,6 +518,10 @@ export class GameScene extends Phaser.Scene {
     this.buildInput();
     this.buildHud();
     this.configureCollisions();
+
+    this.sound.volume = this.registry.get('sfxVolume') ?? 0.7;
+    buildAllSounds(this);
+    startFullMusic(this);
 
     if (data?.extractionTest === true) {
       this.enableExtractionClarityTestMode();
@@ -1361,6 +1367,7 @@ export class GameScene extends Phaser.Scene {
 
     this.resources.ammo -= 1;
     this.nextFireAt = time + 140;
+    this.playSound('sfx_shoot_shiv');
     this.spawnProjectile({
       direction,
       speed: 520,
@@ -1379,6 +1386,7 @@ export class GameScene extends Phaser.Scene {
 
     this.resources.fuel = Math.max(0, this.resources.fuel - 1);
     this.nextFireAt = time + 88;
+    this.playSound('sfx_shoot_incinerator');
 
     const spread = Phaser.Math.FloatBetween(-0.17, 0.17);
     const incineratorDirection = direction.clone().rotate(spread);
@@ -1409,6 +1417,7 @@ export class GameScene extends Phaser.Scene {
     if (this.resources.uvHeat >= MAX_UV_HEAT) {
       this.uvOverheatUntil = time + 1000;
     }
+    this.playSound('sfx_shoot_uv');
 
     this.spawnProjectile({
       direction,
@@ -1429,6 +1438,7 @@ export class GameScene extends Phaser.Scene {
 
     this.resources.ammo = Math.max(0, this.resources.ammo - profile.ammoCost);
     this.nextFireAt = time + profile.cooldownMs;
+    this.playSound('sfx_shoot_spore');
 
     this.spawnProjectile({
       direction,
@@ -1453,6 +1463,7 @@ export class GameScene extends Phaser.Scene {
 
     this.resources.ammo = Math.max(0, this.resources.ammo - ammoToSpend);
     this.nextFireAt = time + profile.cooldownMs;
+    this.playSound('sfx_shoot_shotgun');
 
     for (let pelletIndex = 0; pelletIndex < pelletCount; pelletIndex += 1) {
       const spread = Phaser.Math.FloatBetween(-profile.spread, profile.spread);
@@ -1542,6 +1553,7 @@ export class GameScene extends Phaser.Scene {
 
     if (inSafeRoom && !this.wasInSafeRoom) {
       this.resources.oxygen = MAX_OXYGEN;
+      this.playSound('sfx_extract');
     }
     this.wasInSafeRoom = inSafeRoom;
 
@@ -1651,8 +1663,8 @@ export class GameScene extends Phaser.Scene {
   getPickupSpawnDelayMs() {
     const templateIndex = this.getSectorTemplateIndex();
     const reductionPerSector = templateIndex * 110;
-    const minDelay = Phaser.Math.Clamp(3200 - reductionPerSector, 1800, 3200);
-    const maxDelay = Phaser.Math.Clamp(5600 - reductionPerSector, 3000, 5600);
+    const minDelay = Phaser.Math.Clamp(2000 - reductionPerSector, 1000, 2000);
+    const maxDelay = Phaser.Math.Clamp(3600 - reductionPerSector, 1800, 3600);
 
     return Phaser.Math.Between(minDelay, maxDelay);
   }
@@ -1664,8 +1676,8 @@ export class GameScene extends Phaser.Scene {
 
   getPickupLifetimeMs() {
     const templateIndex = this.getSectorTemplateIndex();
-    const scaledLifetime = PICKUP_BASE_LIFETIME_MS - templateIndex * Math.floor(PICKUP_LIFETIME_BONUS_PER_SECTOR_MS * 0.35);
-    return Phaser.Math.Clamp(scaledLifetime, 5600, PICKUP_BASE_LIFETIME_MS);
+    const scaledLifetime = PICKUP_BASE_LIFETIME_MS + templateIndex * Math.floor(PICKUP_LIFETIME_BONUS_PER_SECTOR_MS * 0.5);
+    return Phaser.Math.Clamp(scaledLifetime, PICKUP_BASE_LIFETIME_MS, PICKUP_MAX_LIFETIME_MS);
   }
 
   spawnEnemy(minDistanceFromPlayer = NORMAL_MIN_SPAWN_DISTANCE, useForwardSector = false) {
@@ -2017,10 +2029,12 @@ export class GameScene extends Phaser.Scene {
     this.spawnParticleEffect(enemy.x, enemy.y, 'spark', 'spark_burst');
 
     if (enemy.health > 0) {
+      this.playSound('sfx_enemy_hit');
       this.showFloatingPickupText(`${Math.ceil(enemy.health)} HP`, '#ffe6ea', enemy.x, enemy.y - 34);
     }
 
     if (enemy.health <= 0) {
+      this.playSound('sfx_enemy_death');
       this.spawnParticleEffect(enemy.x, enemy.y, 'puff', 'puff_fade');
       enemy.disableBody(true, true);
     }
@@ -2038,6 +2052,7 @@ export class GameScene extends Phaser.Scene {
     this.showFloatingPickupText(`NODE -${Math.ceil(projectile.damage)}`, '#cfc5ff', node.x, node.y - 18);
 
     if (nodeHealth > 0) {
+      this.playSound('sfx_node_hit');
       return;
     }
 
@@ -2045,6 +2060,8 @@ export class GameScene extends Phaser.Scene {
     node.setTint(0x4ff0a8);
     node.setAlpha(0.55);
 
+    this.playSound('sfx_node_destroy');
+    this.cameras.main.shake(220, 0.011);
     this.objective.progress += 1;
     this.objective.nodesRemaining = this.getActiveObjectiveNodeCount();
     this.showFloatingPickupText('SPAWNER DISABLED', '#9ef0b2', node.x, node.y - 34);
@@ -2097,6 +2114,8 @@ export class GameScene extends Phaser.Scene {
     this.resources.health = Phaser.Math.Clamp(this.resources.health - damage, 0, 100);
     this.showFloatingPickupText(`-${damage} HP`, '#ff8ea1', player.x, player.y - 28);
 
+    this.playSound('sfx_player_hit');
+    this.cameras.main.shake(180, 0.009);
     this.player.setTint(0xff9db8);
     this.time.delayedCall(120, () => {
       if (this.player.active) {
@@ -2171,6 +2190,11 @@ export class GameScene extends Phaser.Scene {
       pickupTextDurationMs = 1160;
     } else {
       pickupText = 'PICKUP';
+    }
+
+    const pickupSoundMap = { ammo: 'sfx_pickup_ammo', oxygen: 'sfx_pickup_oxygen', medkit: 'sfx_pickup_medkit', weapon: 'sfx_pickup_weapon' };
+    if (pickupSoundMap[pickupType]) {
+      this.playSound(pickupSoundMap[pickupType]);
     }
 
     this.showFloatingPickupText(pickupText, pickupTextColor, pickup.x, pickup.y - 18, pickupTextDurationMs);
@@ -2469,6 +2493,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   onResumeFromPause() {
+    const engine = this.registry.get('musicEngine');
+    engine?.resume();
     const graceUntil = this.time.now + RESUME_CONTACT_GRACE_MS;
     this.pickupContactGraceUntil = Math.max(this.pickupContactGraceUntil, graceUntil);
     this.lastPlayerHitAt = this.time.now;
@@ -2494,5 +2520,11 @@ export class GameScene extends Phaser.Scene {
 
       this.scene.start('GameOverScene');
     });
+  }
+
+  playSound(key, volume = 1) {
+    if (this.cache.audio.has(key)) {
+      this.sound.play(key, { volume });
+    }
   }
 }

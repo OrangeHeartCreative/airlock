@@ -89,3 +89,6 @@ if (debugEnabled) {
   debug.pushLine(`[boot] renderer=${game.config.renderType === Phaser.CANVAS ? 'canvas' : 'webgl'}`);
   debug.pushLine('[boot] scenes registered: StartScene, GameScene, PauseScene, SectorCompleteScene, GameOverScene');
 }
+
+// Autostart hooks removed for release builds.
+// (They were used for local tooling and automated screenshot capture.)

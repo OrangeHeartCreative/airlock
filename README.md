@@ -1,8 +1,10 @@
-# Airlock MVP
+# Airlock: The Oncoming Swarm
 
-Top-down survival shooter prototype built with Phaser 3 + Vite.
+Top-down survival shooter built with Phaser 3 + Vite.
 
-## Milestone Tracking
+## Status
+
+**v1.0 — Ship candidate.** Full 12-sector run loop implemented and validated.
 
 - Canonical development guide: `docs/development-guide.md`
 
@@ -41,9 +43,13 @@ Top-down survival shooter prototype built with Phaser 3 + Vite.
 - Floating combat/pickup feedback text for damage and resource gains
 - Player/enemy collision against walls and objective nodes
 - Enemy spawn safety offset around active nodes to reduce chokepoint jams
-- Sector layout/theme variation (1-3 rotate distinct wall patterns and color mood)
+- Sector layout/theme variation across all 12 sectors (distinct wall patterns, color mood, and scaling per band)
 - Contact recoil window on player hit to create brief post-hit breathing room
 - Enlarged HUD + right-side objective checklist panel (nodes, hostiles, extraction)
+- Procedural background music system (Web Audio API, no audio files):
+  - Atmospheric drone on title and sector-complete screens
+  - Full heavy metal soundtrack (drums, distorted power chords, drone) during active gameplay
+  - Seamless mode switching across scene transitions; ducks during pause
 
 ## Objective/Progression Flow
 
@@ -91,6 +97,9 @@ Controls can be changed in Settings:
 - `src/scenes/PauseScene.js` - Pause menu flow
 - `src/scenes/SectorCompleteScene.js` - Sector transition/continue flow
 - `src/scenes/GameOverScene.js` - Post-death game over + restart flow
+- `src/assets/SoundFactory.js` - Procedural SFX synthesis (Web Audio API)
+- `src/assets/MusicFactory.js` - Procedural background music engine (Web Audio API)
+- `src/assets/TextureFactory.js` - Procedural texture generation
 - `src/config/controls.js` - Control presets and remap helpers
 - `src/config/debug.js` - Global debug toggle and debug URL flag helpers
 - `docs/development-guide.md` - Canonical plan, milestones, QA workflow, and handoff notes
@@ -125,3 +134,6 @@ Preview production build:
 - Enable debug overlays/readouts only with URL flags (`?debug=1`, or `?debugTuning=1` for tuning readout only).
 - Global debug switch lives in `src/config/debug.js` (`DEBUG_TOOLS_ENABLED`) for one-edit enable/disable.
 - Control-instruction text is intentionally removed from non-remapping screens.
+- **Keyboard input is intentionally disabled** across all scenes. The game is gamepad-only by design.
+- **Vite chunk size warning** (Phaser vendor bundle) is a known non-blocker. The `vite.config.js` already splits Phaser into its own `phaser-vendor` chunk; further reduction would require per-module Phaser imports and is deferred post-ship.
+- All audio is generated procedurally via the Web Audio API. No audio files are bundled or required.

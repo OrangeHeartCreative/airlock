@@ -8,6 +8,8 @@ import {
   hasCustomBindings,
   setCustomGamepadBinding
 } from '../config/controls.js';
+import { buildUISounds } from '../assets/SoundFactory.js';
+import { startAmbientMusic } from '../assets/MusicFactory.js';
 
 const MENU_STICK_DEADZONE = 0.5;
 const INPUT_ARM_TIMEOUT_MS = 700;
@@ -67,22 +69,26 @@ export class StartScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x050b08);
+    this.add.rectangle(width / 2, height * 0.22, 460, 96, 0x1a5c30).setOrigin(0.5);
     this.titleText = this.add.text(width / 2, height * 0.22, 'AIRLOCK', {
       fontFamily: 'monospace',
-      fontSize: '52px',
-      color: '#5aff9a',
+      fontSize: '72px',
+      color: '#e8f5ee',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, height * 0.313, 'SECTOR CLEARANCE SYSTEM', {
+    this.add.text(width / 2, height * 0.34, 'THE ONCOMING SWARM', {
       fontFamily: 'monospace',
-      fontSize: '12px',
-      color: '#26aa55'
+      fontSize: '17px',
+      color: '#26aa55',
+      letterSpacing: 9
     }).setOrigin(0.5);
 
-    // Menu panel — matches HUD aesthetic
-    this.add.rectangle(width / 2, height * 0.575, 480, 280, 0x0a1210, 0.88)
-      .setOrigin(0.5).setStrokeStyle(1, 0x3dff8a, 0.28);
+    this.add.text(width / 2, height - 18, 'An Orange Heart Creative Production', {
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      color: '#2a3830'
+    }).setOrigin(0.5);
 
     this.gamepadStatusText = this.add.text(width / 2, height * 0.81, '', {
       fontFamily: 'monospace',
@@ -137,6 +143,9 @@ export class StartScene extends Phaser.Scene {
     });
 
     this.refreshView();
+    this.sound.volume = this.registry.get('sfxVolume') ?? 0.7;
+    buildUISounds(this);
+    startAmbientMusic(this);
   }
 
   initializeSettings() {
@@ -413,10 +422,12 @@ export class StartScene extends Phaser.Scene {
     } else {
       this.remapSelection = Phaser.Math.Wrap(this.remapSelection + direction, 0, GAMEPAD_ACTIONS.length + 1);
     }
+    this.playSound('sfx_ui_navigate');
     this.refreshView();
   }
 
   confirmSelection() {
+    this.playSound('sfx_ui_confirm');
     if (this.menuMode === 'main') {
       if (this.mainSelection === 0) {
         this.startGame();
@@ -661,19 +672,29 @@ export class StartScene extends Phaser.Scene {
       ? `Gamepad: Connected${connectedGamepadName ? ` (${connectedGamepadName})` : ''}`
       : 'Gamepad: Not Connected';
     this.gamepadStatusText.setText(gamepadStatus);
-    this.gamepadStatusText.setVisible(this.menuMode === 'main');
+    this.gamepadStatusText.setVisible(false);
 
     this.menuTexts.forEach((menuText) => menuText.setVisible(false));
 
+    const { width, height } = this.scale;
+
     if (this.menuMode === 'main') {
+      const menuStartY = height * 0.58;
       this.mainOptions.forEach((option, index) => {
+        this.menuTexts[index].setPosition(width / 2, menuStartY + index * 38);
         const selected = index === this.mainSelection;
         this.renderMenuLine(index, option, selected);
       });
-
+      this.gamepadStatusText.setY(menuStartY - 42);
+      this.helpText.setY(menuStartY + this.mainOptions.length * 38 + 24);
       this.helpText.setText(this.mainMenuMessage || '');
       return;
     }
+
+    // Restore default vertical positions for non-main menus
+    this.menuTexts.forEach((menuText, index) => {
+      menuText.setPosition(width / 2, height * 0.44 + index * 38);
+    });
 
     if (this.menuMode === 'settings') {
       const sfxVolume = this.registry.get('sfxVolume') ?? 0.7;
@@ -760,5 +781,11 @@ export class StartScene extends Phaser.Scene {
       carryResources: false
     });
     this.scene.stop('StartScene');
+  }
+
+  playSound(key, volume = 1) {
+    if (this.cache.audio.has(key)) {
+      this.sound.play(key, { volume });
+    }
   }
 }

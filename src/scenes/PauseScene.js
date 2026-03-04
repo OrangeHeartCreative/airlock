@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { getControlConfig } from '../config/controls.js';
+import { buildUISounds } from '../assets/SoundFactory.js';
+import { pauseBackgroundMusic } from '../assets/MusicFactory.js';
 
 const PAUSE_BUTTON_ARMED_KEY = 'pauseButtonArmed';
 const MENU_STICK_DEADZONE = 0.5;
@@ -77,6 +79,9 @@ export class PauseScene extends Phaser.Scene {
     }
 
     this.refreshMenu();
+    this.sound.volume = this.registry.get('sfxVolume') ?? 0.7;
+    buildUISounds(this);
+    pauseBackgroundMusic(this);
   }
 
   update() {
@@ -96,11 +101,13 @@ export class PauseScene extends Phaser.Scene {
 
     if (stickUpPressed) {
       this.selectedOption = Phaser.Math.Wrap(this.selectedOption - 1, 0, this.options.length);
+      this.playSound('sfx_ui_navigate');
       this.refreshMenu();
     }
 
     if (stickDownPressed) {
       this.selectedOption = Phaser.Math.Wrap(this.selectedOption + 1, 0, this.options.length);
+      this.playSound('sfx_ui_navigate');
       this.refreshMenu();
     }
 
@@ -244,6 +251,7 @@ export class PauseScene extends Phaser.Scene {
     if (this.transitionQueued) {
       return;
     }
+    this.playSound('sfx_ui_confirm');
 
     if (this.selectedOption === 0) {
       this.resumeGame();
@@ -297,6 +305,12 @@ export class PauseScene extends Phaser.Scene {
     }
 
     this.adjustVolume(0.1);
+  }
+
+  playSound(key, volume = 1) {
+    if (this.cache.audio.has(key)) {
+      this.sound.play(key, { volume });
+    }
   }
 
   refreshMenu() {

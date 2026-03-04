@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { startAmbientMusic } from '../assets/MusicFactory.js';
 
 const GAMEPAD_CONFIRM_BUTTON = 0;
 
@@ -64,6 +65,7 @@ export class SectorCompleteScene extends Phaser.Scene {
     }
 
     this.confirmLockedUntil = this.time.now + 180;
+    startAmbientMusic(this);
   }
 
   update() {
