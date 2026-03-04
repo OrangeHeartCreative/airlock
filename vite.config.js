@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // Relative base path so asset URLs work inside itch.io's iframe sandbox.
+  base: './',
   build: {
     // Phaser's minified bundle exceeds Vite's default 500 kB warning threshold.
     // This is expected and documented; we've already split it into its own
