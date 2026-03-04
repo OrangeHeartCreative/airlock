@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 
-const GAMEPAD_CONTINUE_BUTTON = 1;
-const GAMEPAD_MENU_BUTTON = 0;
+const GAMEPAD_CONFIRM_BUTTON = 0;
 
 export class SectorCompleteScene extends Phaser.Scene {
   constructor() {
@@ -28,53 +27,32 @@ export class SectorCompleteScene extends Phaser.Scene {
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x050d08);
 
+    // Central content panel — matches HUD aesthetic
+    this.add.rectangle(width / 2, height * 0.53, 460, 280, 0x0a1210, 0.88)
+      .setOrigin(0.5).setStrokeStyle(1, 0x3dff8a, 0.28);
+
     this.add.text(width / 2, height * 0.34, `SECTOR ${this.nextSectorIndex - 1} CLEARED`, {
-      fontFamily: 'Arial',
-      fontSize: '58px',
-      color: '#d6f7cb'
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, height * 0.48, `Next Sector: ${this.nextSectorIndex}`, {
-      fontFamily: 'Arial',
-      fontSize: '28px',
-      color: '#a9d7ff'
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, height * 0.62, 'B to continue  ·  A for Main Menu', {
-      fontFamily: 'Arial',
-      fontSize: '18px',
-      color: '#6a7a6a'
-    }).setOrigin(0.5);
-
-    this.continueButton = this.add.text(width / 2, height * 0.72, 'CONTINUE', {
-      fontFamily: 'Arial',
-      fontSize: '28px',
-      color: '#d6f7cb',
+      fontFamily: 'monospace',
+      fontSize: '42px',
+      color: '#5aff9a',
       fontStyle: 'bold'
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    }).setOrigin(0.5);
 
-    this.menuButton = this.add.text(width / 2, height * 0.80, 'MAIN MENU', {
-      fontFamily: 'Arial',
-      fontSize: '24px',
-      color: '#a9d7ff'
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    this.add.text(width / 2, height * 0.49, `ENTERING SECTOR ${this.nextSectorIndex}`, {
+      fontFamily: 'monospace',
+      fontSize: '16px',
+      color: '#c0d8cc'
+    }).setOrigin(0.5);
 
-    this.continueButton.on('pointerdown', this.advanceToNextSector, this);
-    this.menuButton.on('pointerdown', this.returnToMainMenu, this);
-
-    this.continueButton.on('pointerover', () => {
-      this.continueButton.setColor('#f1ffd6');
-    });
-    this.continueButton.on('pointerout', () => {
-      this.continueButton.setColor('#d6f7cb');
-    });
-
-    this.menuButton.on('pointerover', () => {
-      this.menuButton.setColor('#cce7ff');
-    });
-    this.menuButton.on('pointerout', () => {
-      this.menuButton.setColor('#a9d7ff');
-    });
+    // Continue prompt styled as a terminal confirm button
+    this.add.rectangle(width / 2, height * 0.65, 256, 44, 0x0d201a)
+      .setOrigin(0.5).setStrokeStyle(1, 0x3dff8a, 0.55);
+    this.continueButton = this.add.text(width / 2, height * 0.65, '[A]  CONTINUE', {
+      fontFamily: 'monospace',
+      fontSize: '18px',
+      color: '#5aff9a',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
 
     if (this.input.gamepad) {
       this.input.gamepad.once('connected', (pad) => {
@@ -97,17 +75,13 @@ export class SectorCompleteScene extends Phaser.Scene {
       return;
     }
 
-    const gamepadContinue = this.isGamepadButtonJustPressed(GAMEPAD_CONTINUE_BUTTON);
-    const gamepadMenu = this.isGamepadButtonJustPressed(GAMEPAD_MENU_BUTTON);
+    const gamepadConfirm = this.isGamepadButtonJustPressed(GAMEPAD_CONFIRM_BUTTON);
 
-    if (gamepadContinue) {
-      this.advanceToNextSector();
+    if (!gamepadConfirm) {
       return;
     }
 
-    if (gamepadMenu) {
-      this.returnToMainMenu();
-    }
+    this.advanceToNextSector();
   }
 
   advanceToNextSector() {
@@ -124,15 +98,6 @@ export class SectorCompleteScene extends Phaser.Scene {
       carriedWeaponId: this.carriedWeaponId,
       carriedWaveLevel: this.carriedWaveLevel
     });
-  }
-
-  returnToMainMenu() {
-    if (this.transitionQueued) {
-      return;
-    }
-
-    this.transitionQueued = true;
-    this.scene.start('StartScene');
   }
 
   isGamepadButtonPressed(buttonIndex) {

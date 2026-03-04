@@ -35,10 +35,15 @@ export class GameOverScene extends Phaser.Scene {
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x050b08);
 
-    this.add.text(width / 2, height * 0.4, 'Game Over', {
-      fontFamily: 'Arial',
-      fontSize: '72px',
-      color: '#f4d1d6'
+    // Content panel — matches HUD aesthetic
+    this.add.rectangle(width / 2, height * 0.65, 380, 200, 0x0a1210, 0.88)
+      .setOrigin(0.5).setStrokeStyle(1, 0x3dff8a, 0.28);
+
+    this.add.text(width / 2, height * 0.28, 'GAME OVER', {
+      fontFamily: 'monospace',
+      fontSize: '52px',
+      color: '#ff7755',
+      fontStyle: 'bold'
     }).setOrigin(0.5);
 
     this.menuOptions = [
@@ -46,10 +51,10 @@ export class GameOverScene extends Phaser.Scene {
       this.createMenuOption(width / 2, height * 0.72, 'Main Menu', () => this.returnToMainMenu())
     ];
 
-    this.add.text(width / 2, height * 0.84, 'Left Stick ↑/↓: Select  •  A: Confirm', {
-      fontFamily: 'Arial',
-      fontSize: '18px',
-      color: '#d4f5c6'
+    this.add.text(width / 2, height * 0.88, '\u2191\u2193  Select  \u2022  A  Confirm', {
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: '#88aa88'
     }).setOrigin(0.5);
 
     this.refreshMenuSelection();
@@ -102,14 +107,14 @@ export class GameOverScene extends Phaser.Scene {
 
   createMenuOption(x, y, label, action) {
     const button = this.add
-      .rectangle(x, y, 280, 68, 0x2f4a3f)
-      .setStrokeStyle(2, 0xd4f5c6)
+      .rectangle(x, y, 280, 48, 0x0d201a)
+      .setStrokeStyle(1, 0x3dff8a, 0.35)
       .setInteractive({ useHandCursor: true });
 
     const text = this.add.text(x, y, label, {
-      fontFamily: 'Arial',
-      fontSize: '32px',
-      color: '#d4f5c6'
+      fontFamily: 'monospace',
+      fontSize: '20px',
+      color: '#c0d8cc'
     }).setOrigin(0.5);
 
     const option = { button, text, action };
@@ -141,8 +146,9 @@ export class GameOverScene extends Phaser.Scene {
   refreshMenuSelection() {
     this.menuOptions.forEach((option, index) => {
       const selected = index === this.menuSelection;
-      option.button.setFillStyle(selected ? 0x3b5a4c : 0x2f4a3f);
-      option.text.setColor(selected ? '#f0ffd7' : '#d4f5c6');
+      option.button.setFillStyle(selected ? 0x122a1e : 0x0d201a);
+      option.button.setStrokeStyle(1, 0x3dff8a, selected ? 0.65 : 0.28);
+      option.text.setColor(selected ? '#5aff9a' : '#c0d8cc');
     });
   }
 

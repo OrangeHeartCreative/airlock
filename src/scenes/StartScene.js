@@ -8,9 +8,10 @@ import {
   hasCustomBindings,
   setCustomGamepadBinding
 } from '../config/controls.js';
-import { resolveSectorPassword } from '../config/sectorPasswords.js';
 
 const MENU_STICK_DEADZONE = 0.5;
+const INPUT_ARM_TIMEOUT_MS = 700;
+const PAUSE_BUTTON_ARMED_KEY = 'pauseButtonArmed';
 
 export class StartScene extends Phaser.Scene {
   constructor() {
@@ -20,7 +21,7 @@ export class StartScene extends Phaser.Scene {
     this.settingsSelection = 0;
     this.remapSelection = 0;
     this.mainOptions = ['Start Run', 'Settings'];
-    this.settingsOptions = ['SFX Volume', 'Control Preset', 'Remap Gamepad', 'Sector Password', 'Reset Custom Binds', 'Back'];
+    this.settingsOptions = ['SFX Volume', 'Control Preset', 'Remap Gamepad', 'Reset Custom Binds', 'Back'];
     this.controlPresetOptions = [];
     this.awaitingBinding = null;
     this.awaitingBindReadyAt = 0;
@@ -30,6 +31,7 @@ export class StartScene extends Phaser.Scene {
     this.detectedGamepadName = null;
     this.previousGamepadButtons = new Map();
     this.inputArmed = false;
+    this.inputArmDeadlineAt = 0;
     this.prevConfirmPressed = false;
     this.prevBackPressed = false;
     this.mainMenuMessage = '';
@@ -52,6 +54,7 @@ export class StartScene extends Phaser.Scene {
     this.pendingRestoreMode = null;
     this.previousGamepadButtons = new Map();
     this.inputArmed = false;
+    this.inputArmDeadlineAt = this.time.now + INPUT_ARM_TIMEOUT_MS;
     this.prevConfirmPressed = false;
     this.prevBackPressed = false;
     this.mainMenuMessage = '';
@@ -64,32 +67,43 @@ export class StartScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x050b08);
-    this.titleText = this.add.text(width / 2, height * 0.28, 'AIRLOCK', {
-      fontFamily: 'Arial',
-      fontSize: '68px',
-      color: '#d4f5c6'
+    this.titleText = this.add.text(width / 2, height * 0.22, 'AIRLOCK', {
+      fontFamily: 'monospace',
+      fontSize: '52px',
+      color: '#5aff9a',
+      fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    this.gamepadStatusText = this.add.text(width / 2, height * 0.8, '', {
-      fontFamily: 'Arial',
-      fontSize: '18px',
-      color: '#a9d7ff',
+    this.add.text(width / 2, height * 0.313, 'SECTOR CLEARANCE SYSTEM', {
+      fontFamily: 'monospace',
+      fontSize: '12px',
+      color: '#26aa55'
+    }).setOrigin(0.5);
+
+    // Menu panel — matches HUD aesthetic
+    this.add.rectangle(width / 2, height * 0.575, 480, 280, 0x0a1210, 0.88)
+      .setOrigin(0.5).setStrokeStyle(1, 0x3dff8a, 0.28);
+
+    this.gamepadStatusText = this.add.text(width / 2, height * 0.81, '', {
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: '#6a8a7a',
       align: 'center'
     }).setOrigin(0.5);
 
     const menuLineCount = Math.max(this.mainOptions.length, this.settingsOptions.length, GAMEPAD_ACTIONS.length + 1);
     this.menuTexts = Array.from({ length: menuLineCount }, (_, index) => {
-      return this.add.text(width / 2, height * 0.5 + index * 52, '', {
-        fontFamily: 'Arial',
-        fontSize: '30px',
-        color: '#e7f2eb'
+      return this.add.text(width / 2, height * 0.44 + index * 38, '', {
+        fontFamily: 'monospace',
+        fontSize: '20px',
+        color: '#c0d8cc'
       }).setOrigin(0.5);
     });
 
     this.helpText = this.add.text(width / 2, height * 0.87, '', {
-      fontFamily: 'Arial',
-      fontSize: '18px',
-      color: '#ffbbd5'
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: '#88aa88'
     }).setOrigin(0.5);
 
     this.input.on('pointerdown', this.onPointerDown, this);
@@ -158,6 +172,11 @@ export class StartScene extends Phaser.Scene {
       if (!confirmPressed && !backPressed) {
         this.inputArmed = true;
       }
+
+      if (this.time.now >= this.inputArmDeadlineAt) {
+        this.inputArmed = true;
+      }
+
       this.prevConfirmPressed = confirmPressed;
       this.prevBackPressed = backPressed;
       return;
@@ -436,11 +455,6 @@ export class StartScene extends Phaser.Scene {
     }
 
     if (this.settingsSelection === 3) {
-      this.requestSectorPassword();
-      return;
-    }
-
-    if (this.settingsSelection === 4) {
       clearCustomGamepadBindings(this.registry);
       this.refreshView();
       return;
@@ -514,30 +528,6 @@ export class StartScene extends Phaser.Scene {
     this.refreshView();
   }
 
-  requestSectorPassword() {
-    const promptFn = globalThis?.prompt;
-    if (typeof promptFn !== 'function') {
-      this.setMainMenuMessage('Password entry unavailable in this build.');
-      return;
-    }
-
-    const enteredPassword = promptFn('Enter sector password (ex: SPORE, S9, AIRLOCK-12):', '');
-    if (enteredPassword === null) {
-      return;
-    }
-
-    const targetSector = resolveSectorPassword(enteredPassword);
-    if (!targetSector) {
-      this.setMainMenuMessage('Invalid password.');
-      this.menuMode = 'main';
-      this.mainSelection = 0;
-      this.refreshView();
-      return;
-    }
-
-    this.startGameAtSector(targetSector);
-  }
-
   beginBindingCapture() {
     const actionList = GAMEPAD_ACTIONS;
 
@@ -568,6 +558,7 @@ export class StartScene extends Phaser.Scene {
     };
     this.awaitingBindReadyAt = this.time.now + 180;
     this.inputArmed = false;
+    this.inputArmDeadlineAt = this.time.now + INPUT_ARM_TIMEOUT_MS;
     this.refreshView();
   }
 
@@ -615,6 +606,7 @@ export class StartScene extends Phaser.Scene {
     setCustomGamepadBinding(this.registry, this.awaitingBinding.action, buttonIndex);
     this.awaitingBinding = null;
     this.inputArmed = false;
+    this.inputArmDeadlineAt = this.time.now + INPUT_ARM_TIMEOUT_MS;
     this.nextMenuInputAt = this.time.now + 150;
     this.refreshView();
   }
@@ -654,7 +646,7 @@ export class StartScene extends Phaser.Scene {
 
     menuText.setVisible(true);
     menuText.setText(`${isSelected ? '▶ ' : ''}${text}`);
-    menuText.setColor(isSelected ? '#ffb8d6' : '#e7f2eb');
+    menuText.setColor(isSelected ? '#5aff9a' : '#c0d8cc');
   }
 
   refreshView() {
@@ -689,7 +681,6 @@ export class StartScene extends Phaser.Scene {
         `SFX Volume: ${Math.round(sfxVolume * 100)}%`,
         `Control Preset: ${currentPresetLabel}`,
         'Remap Gamepad',
-        'Sector Password',
         `Reset Custom Binds (${customActive ? 'ON' : 'OFF'})`,
         'Back'
       ];
@@ -744,6 +735,14 @@ export class StartScene extends Phaser.Scene {
   startGameAtSector(sectorIndex) {
     const normalizedSector = Math.max(1, Math.round(Number(sectorIndex) || 1));
 
+    if (this.scene.isActive('SectorCompleteScene') || this.scene.isPaused('SectorCompleteScene') || this.scene.isSleeping('SectorCompleteScene')) {
+      this.scene.stop('SectorCompleteScene');
+    }
+
+    if (this.scene.isActive('GameOverScene') || this.scene.isPaused('GameOverScene') || this.scene.isSleeping('GameOverScene')) {
+      this.scene.stop('GameOverScene');
+    }
+
     if (this.scene.isActive('PauseScene') || this.scene.isPaused('PauseScene') || this.scene.isSleeping('PauseScene')) {
       this.scene.stop('PauseScene');
     }
@@ -752,11 +751,14 @@ export class StartScene extends Phaser.Scene {
       this.scene.stop('GameScene');
     }
 
+    this.registry.set(PAUSE_BUTTON_ARMED_KEY, false);
+    this.registry.set('pauseInputLockUntil', this.time.now + 700);
+
     this.registry.set('sectorIndex', normalizedSector);
     this.scene.start('GameScene', {
       sectorIndex: normalizedSector,
       carryResources: false
     });
-    this.scene.stop();
+    this.scene.stop('StartScene');
   }
 }

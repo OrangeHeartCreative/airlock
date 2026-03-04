@@ -795,10 +795,33 @@ function buildSafeZoneTile(scene) {
 
 // ========================== ANIMATION DEFINITIONS ===========================
 
+const ANIMATION_KEYS = [
+  'player_walk',
+  'player_idle',
+  'spore_pulse',
+  'brute_lumber',
+  'stalker_skitter',
+  'node_pulse',
+  'ammo_glow',
+  'oxygen_glow',
+  'medkit_glow',
+  'weaponPickup_glow',
+  'spark_burst',
+  'puff_fade',
+  'muzzle_flash',
+  'safe_zone_pulse'
+];
+
+function removeStaleAnimations(scene) {
+  ANIMATION_KEYS.forEach((key) => {
+    if (scene.anims.exists(key)) {
+      scene.anims.remove(key);
+    }
+  });
+}
+
 function buildAnimations(scene) {
-  if (scene.anims.exists('player_walk')) {
-    return;
-  }
+  removeStaleAnimations(scene);
 
   scene.anims.create({
     key: 'player_walk',

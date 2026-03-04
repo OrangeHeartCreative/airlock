@@ -56,6 +56,16 @@ export function getControlConfig(registry) {
     ...customGamepadBinds
   };
 
+  const pauseConflicts = new Set([
+    gamepadConfig.interactButton,
+    gamepadConfig.firePrimaryButton,
+    gamepadConfig.fireSecondaryButton
+  ]);
+
+  if (pauseConflicts.has(gamepadConfig.pauseButton)) {
+    gamepadConfig.pauseButton = preset.gamepad.pauseButton;
+  }
+
   return {
     label: preset.label,
     gamepad: {

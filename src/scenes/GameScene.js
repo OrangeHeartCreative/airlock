@@ -5,6 +5,7 @@ import { buildAllTextures } from '../assets/TextureFactory.js';
 
 const WORLD_WIDTH = 2200;
 const WORLD_HEIGHT = 1400;
+const HUD_HEIGHT = 152;
 
 // Core player/resource caps.
 const MAX_OXYGEN = 100;
@@ -30,6 +31,7 @@ const PICKUP_CONTACT_GRACE_MS = 320;
 const PICKUP_OVERLAP_PROTECTION_RADIUS_PX = 24;
 const PICKUP_WALL_PADDING_PX = 20;
 const PICKUP_SAFE_ROOM_PADDING_PX = 36;
+const CTM_OVERDOSE_HP_DRAIN = 0.6;
 const NODE_OVERLAP_HINT_ENABLED = true;
 const NODE_OVERLAP_HINT_SCAN_INTERVAL_MS = 220;
 const NODE_OVERLAP_HINT_NODE_RADIUS_PX = 190;
@@ -522,6 +524,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.setZoom(1.6);
+    this.cameras.main.setViewport(0, HUD_HEIGHT, this.scale.width, this.scale.height - HUD_HEIGHT);
 
     this.hudCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     this.hudCamera.setScroll(-99999, -99999);
@@ -1014,14 +1017,11 @@ export class GameScene extends Phaser.Scene {
 
     const addHudEl = (el) => { this.hudElements.push(el); return el; };
 
+    // Full-width black backing bar
+    addHudEl(this.add.rectangle(0, 0, sw, HUD_HEIGHT, 0x000000, 0.72)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(99));
+
     // ---- LEFT PANEL: Stats ----
-    addHudEl(this.add.rectangle(0, 0, 240, 162, 0x0a1210, 0.75)
-      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
-    // Left panel border
-    addHudEl(this.add.rectangle(240, 0, 2, 162, 0x3dff8a, 0.25)
-      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
-    addHudEl(this.add.rectangle(0, 162, 242, 2, 0x3dff8a, 0.25)
-      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
 
     // Sector label
     this.hud.sectorLabel = addHudEl(this.add.text(14, 8, '', {
@@ -1077,7 +1077,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(103));
 
     // Contamination bar
-    addHudEl(this.add.text(14, 114, 'CTM', {
+    this.hud.ctmLabel = addHudEl(this.add.text(14, 114, 'CTM', {
       fontFamily: 'monospace', fontSize: '11px', color: '#cc88aa'
     }).setScrollFactor(0).setDepth(101));
     this.hud.ctmBarBg = addHudEl(this.add.rectangle(40, 116, 186, 12, 0x1a0a14)
@@ -1096,30 +1096,22 @@ export class GameScene extends Phaser.Scene {
     }).setScrollFactor(0).setDepth(101));
 
     // ---- RIGHT PANEL: Objectives ----
-    addHudEl(this.add.rectangle(sw, 0, 280, 120, 0x0a1210, 0.75)
-      .setOrigin(1, 0).setScrollFactor(0).setDepth(100));
-    // Right panel border
-    addHudEl(this.add.rectangle(sw - 280, 0, 2, 120, 0x3dff8a, 0.25)
-      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
-    addHudEl(this.add.rectangle(sw - 280, 120, 282, 2, 0x3dff8a, 0.25)
-      .setOrigin(0, 0).setScrollFactor(0).setDepth(100));
-
     addHudEl(this.add.text(sw - 14, 8, 'OBJECTIVES', {
       fontFamily: 'monospace', fontSize: '11px', color: '#5aff9a', fontStyle: 'bold', align: 'right'
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
 
-    this.hud.obj1 = addHudEl(this.add.text(sw - 14, 28, '', {
+    this.hud.obj1 = addHudEl(this.add.text(sw - 14, 48, '', {
       fontFamily: 'monospace', fontSize: '11px', color: '#c0d8cc', align: 'right'
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
-    this.hud.obj2 = addHudEl(this.add.text(sw - 14, 48, '', {
+    this.hud.obj2 = addHudEl(this.add.text(sw - 14, 70, '', {
       fontFamily: 'monospace', fontSize: '11px', color: '#c0d8cc', align: 'right'
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
-    this.hud.obj3 = addHudEl(this.add.text(sw - 14, 68, '', {
+    this.hud.obj3 = addHudEl(this.add.text(sw - 14, 92, '', {
       fontFamily: 'monospace', fontSize: '11px', color: '#c0d8cc', align: 'right'
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
 
-    // Minimap area hint (bottom-right)
-    this.hud.extractHint = addHudEl(this.add.text(sw - 14, 92, '', {
+    // Extraction hint — aligned with debug row on left side
+    this.hud.extractHint = addHudEl(this.add.text(sw - 14, 120, '', {
       fontFamily: 'monospace', fontSize: '10px', color: '#4effa8', align: 'right'
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(101));
 
@@ -1546,11 +1538,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   updateSurvival(dt) {
-    const oxygenDrain = this.isInSafeRoom() ? 0.8 : 1.8;
-    const contaminationGain = this.isInSafeRoom() ? -6 : 2.5;
+    const inSafeRoom = this.isInSafeRoom();
+
+    if (inSafeRoom && !this.wasInSafeRoom) {
+      this.resources.oxygen = MAX_OXYGEN;
+    }
+    this.wasInSafeRoom = inSafeRoom;
+
+    const oxygenDrain = inSafeRoom ? 0.8 : 1.8;
 
     this.resources.oxygen = Phaser.Math.Clamp(this.resources.oxygen - oxygenDrain * dt, 0, MAX_OXYGEN);
+
+    const contaminationGain = inSafeRoom ? -6 : (this.resources.oxygen <= 0 ? 2.5 : 0);
     this.resources.contamination = Phaser.Math.Clamp(this.resources.contamination + contaminationGain * dt, 0, MAX_CONTAMINATION);
+
+    if (this.resources.contamination >= MAX_CONTAMINATION) {
+      this.resources.health = Phaser.Math.Clamp(this.resources.health - CTM_OVERDOSE_HP_DRAIN * dt, 0, 100);
+    }
 
     if (this.resources.health <= 0) {
       this.endRun();
@@ -2130,7 +2134,7 @@ export class GameScene extends Phaser.Scene {
       const nextOxygen = Math.min(this.resources.oxygen + 24, MAX_OXYGEN);
       const oxygenGain = Math.max(0, Math.round(nextOxygen - this.resources.oxygen));
       this.resources.oxygen = nextOxygen;
-      this.resources.contamination = Math.max(this.resources.contamination - 18, 0);
+      this.resources.contamination = 0;
 
       pickupText = `OXYGEN +${oxygenGain}`;
       pickupTextColor = '#8af7ff';
@@ -2394,7 +2398,13 @@ export class GameScene extends Phaser.Scene {
 
     // Contamination bar
     const ctmPct = Phaser.Math.Clamp(this.resources.contamination / 100, 0, 1);
+    const ctmOverdose = ctmPct >= 1;
+    const ctmFillColor = ctmOverdose ? 0xff2244 : 0xcc4488;
+    const ctmBorderAlpha = ctmOverdose ? 0.8 : 0.3;
     this.hud.ctmBarFill.width = Math.round(184 * ctmPct);
+    this.hud.ctmBarFill.setFillStyle(ctmFillColor);
+    this.hud.ctmBarBorder.setStrokeStyle(1, ctmFillColor, ctmBorderAlpha);
+    this.hud.ctmLabel.setColor(ctmOverdose ? '#ff2244' : '#cc88aa');
     this.hud.ctmText.setText(ctmPct > 0.01 ? `${Math.ceil(this.resources.contamination)}` : '');
 
     // Objectives

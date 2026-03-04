@@ -33,13 +33,15 @@ Status: Canonical development document
 - Active model is gamepad-first.
 - Gameplay/menu flows are aligned to gamepad controls with pointer support where applicable.
 - Keyboard input is disabled across all scenes (no movement, confirm, or back actions bound to keys).
-- `SectorCompleteScene` progression is pointer/gamepad only:
-  - Continue: click `CONTINUE` or gamepad `B`.
-  - Return to menu: click `MAIN MENU` or gamepad `A`.
+- `SectorCompleteScene` progression is gamepad-only:
+  - Continue to next sector with gamepad `A`.
+  - Main-menu exit option is disabled on this screen to preserve run continuity.
+  - On-screen button-instruction hint text is intentionally hidden.
 - `StartScene` menu input uses an arm-gate + edge-trigger model:
   - On scene create, input is disarmed. The menu becomes responsive only after all face buttons are fully released.
   - Confirm and back fire on the press edge (down → not-down → down), never on held state.
   - Directional navigation (stick or D-pad) uses a hold-to-scroll debounce once armed.
+  - A timeout-based fallback re-arms input after a short window to prevent permanent lockout if a button reports as held/noisy.
   - This prevents phantom confirms when arriving from a scene transition with a button still physically held.
 - Scene transitions call `scene.stop()` on the originating scene after launching the target, preventing ghost-scene parallel execution.
 
@@ -47,6 +49,15 @@ Status: Canonical development document
 - Pause/resume/restart behavior.
 - Sector transition loop: `GameScene -> SectorCompleteScene -> GameScene`.
 - Death flow: death delay -> `GameOverScene` -> restart to sector 1.
+
+### Survival System
+- Oxygen drains continuously at 1.8/s outside the safe room and 0.8/s inside.
+- Contamination (CTM) only begins building (2.5/s) once oxygen reaches 0. While oxygen remains above 0, CTM does not accumulate.
+- Inside the safe room, CTM clears at -6/s regardless of oxygen level.
+- Upon entering the safe room, oxygen is instantly restored to full (MAX_OXYGEN).
+- At max contamination, health drains at `CTM_OVERDOSE_HP_DRAIN` per second.
+- O2 pickups: restore +24 oxygen and fully clear contamination. Do not restore HP.
+- Medkit pickups: restore +22 HP, +10 oxygen, and reduce contamination by 10.
 
 ### Readability Cue
 - Objective/pickup overlap readability is supported by contextual node-overlap hint behavior.
@@ -212,7 +223,7 @@ When `ISSUE` is used, log:
 ## 8) Change Log Notes (Current Snapshot)
 
 - Input model migrated to gamepad-first across active gameplay/menu flows.
-- Password-based progression flow removed.
+- Password-based progression flow available via settings menu (`Sector Password`).
 - Weapon progression moved to crate-based random unlocked pickups.
 - Pause menu includes main-menu return path.
 - QA pass logged: objective/pickup overlap readability validated in sectors 10-12 (non-spam, context-correct behavior).
@@ -247,3 +258,31 @@ When `ISSUE` is used, log:
     - Confirm and back now fire on press edge only; directional hold-scroll debounce unchanged.
   - Build size reduced by ~1.3 kB (dead code removed).
 - Session tag: 2026-03-04 / Fix-SceneTransition-InputLock.
+- Session implementation summary (2026-03-04 — menu control polish):
+  - `SectorCompleteScene` now uses a single confirm button (`A`) for both outcomes.
+    - Left stick up/down changes selected option (`CONTINUE` / `MAIN MENU`).
+    - `A` confirms the selected option.
+    - Pointer click behavior remains supported for both options.
+    - Removed on-screen controller instruction line from the sector-complete panel.
+  - `StartScene` input arming now includes a short timeout fallback to prevent settings/menu lockout when gamepad button state is noisy.
+- Session tag: 2026-03-04 / Fix-SettingsMenu-InputArm-Timeout.
+- Session implementation summary (2026-03-04 — pause/start-run stability closeout):
+  - Fixed `Pause -> Main -> Start Run` lock path by hardening pause/input handoff state.
+    - `PauseScene` now disarms pause-button state (`pauseButtonArmed = false`) before launching `StartScene` from pause menu.
+    - `StartScene.startGameAtSector()` now sets a startup pause-input lock and disarms pause before launching `GameScene`.
+  - Added control-config guard to prevent pause-button collisions with interact/fire buttons.
+    - In `getControlConfig()`, if `pauseButton` conflicts with interact/primary/secondary fire, it falls back to preset pause button.
+  - Fixed Phaser animation-frame crash (`Cannot read properties of null (reading 'sourceSize')`) after run restarts.
+    - `TextureFactory` now removes stale animation definitions before rebuilding animations after texture regeneration.
+- Session tag: 2026-03-04 / Fix-PauseMainStartRun-And-AnimFrames.
+- Session implementation summary (2026-03-04 — sector complete flow simplification):
+  - Removed `MAIN MENU` option from `SectorCompleteScene`.
+  - Sector-complete confirmation is now single-path: gamepad `A` always advances to next sector.
+  - Removed option-selection logic tied to stick up/down on the sector-complete screen.
+- Session tag: 2026-03-04 / Simplify-SectorComplete-ContinueOnly.
+- Session implementation summary (2026-03-04 — survival system rework):
+  - CTM now only accumulates after oxygen reaches 0 (previously ran in parallel with oxygen drain).
+  - O2 pickups now fully clear contamination on pickup (previously reduced CTM by 18).
+  - O2 pickups do not restore HP.
+  - Entering the safe room instantly restores oxygen to full (`MAX_OXYGEN`).
+- Session tag: 2026-03-04 / Rework-SurvivalSystem-O2-CTM.

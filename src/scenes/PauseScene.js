@@ -34,24 +34,29 @@ export class PauseScene extends Phaser.Scene {
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.58);
 
-    this.add.text(width / 2, height * 0.24, 'PAUSED', {
-      fontFamily: 'Arial',
-      fontSize: '54px',
-      color: '#d9f6cb'
+    // Central menu panel — matches HUD aesthetic
+    this.add.rectangle(width / 2, height * 0.53, 360, 240, 0x0a1210, 0.92)
+      .setOrigin(0.5).setStrokeStyle(1, 0x3dff8a, 0.28);
+
+    this.add.text(width / 2, height * 0.27, 'PAUSED', {
+      fontFamily: 'monospace',
+      fontSize: '40px',
+      color: '#5aff9a',
+      fontStyle: 'bold'
     }).setOrigin(0.5);
 
     this.optionTexts = this.options.map((_, index) => {
-      return this.add.text(width / 2, height * 0.44 + index * 56, '', {
-        fontFamily: 'Arial',
-        fontSize: '28px',
-        color: '#e7f2eb'
+      return this.add.text(width / 2, height * 0.42 + index * 42, '', {
+        fontFamily: 'monospace',
+        fontSize: '20px',
+        color: '#c0d8cc'
       }).setOrigin(0.5);
     });
 
-    this.helpText = this.add.text(width / 2, height * 0.82, '', {
-      fontFamily: 'Arial',
-      fontSize: '18px',
-      color: '#f6dcb5'
+    this.helpText = this.add.text(width / 2, height * 0.84, '', {
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: '#88aa88'
     }).setOrigin(0.5);
 
     if (this.input.gamepad) {
@@ -263,7 +268,7 @@ export class PauseScene extends Phaser.Scene {
 
     if (this.selectedOption === 2) {
       this.transitionQueued = true;
-      this.registry.set(PAUSE_BUTTON_ARMED_KEY, true);
+      this.registry.set(PAUSE_BUTTON_ARMED_KEY, false);
       this.registry.set('pauseInputLockUntil', this.time.now + 250);
 
       if (this.input?.manager?.resetPointers) {
@@ -305,7 +310,7 @@ export class PauseScene extends Phaser.Scene {
 
       const selected = index === this.selectedOption;
       textObject.setText(`${selected ? '▶ ' : ''}${label}`);
-      textObject.setColor(selected ? '#ffb8d6' : '#e7f2eb');
+      textObject.setColor(selected ? '#5aff9a' : '#c0d8cc');
     });
   }
 

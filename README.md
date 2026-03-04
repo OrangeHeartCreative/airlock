@@ -30,9 +30,14 @@ Top-down survival shooter prototype built with Phaser 3 + Vite.
   - Pulse Shotgun (close-range burst)
 - Pickup types:
   - Ammo (blue): ammo + fuel
-  - Oxygen (cyan): oxygen + contamination relief
+  - Oxygen (cyan): oxygen refill + full contamination clear (no HP effect)
   - Medkit (red cross): health + oxygen + minor contamination relief
   - Weapon Crate (violet): random unlocked weapon swap with on-pickup weapon-name hint
+- Survival pressure model:
+  - Oxygen drains continuously outside the safe room
+  - Contamination (CTM) only begins building once oxygen hits 0
+  - Entering the safe room instantly refills oxygen to full and clears CTM over time
+  - At max CTM, health drains until the player dies or finds relief
 - Floating combat/pickup feedback text for damage and resource gains
 - Player/enemy collision against walls and objective nodes
 - Enemy spawn safety offset around active nodes to reduce chokepoint jams
