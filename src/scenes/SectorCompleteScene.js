@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
-const GAMEPAD_CONTINUE_BUTTON = 0;
-const GAMEPAD_MENU_BUTTON = 1;
+const GAMEPAD_CONTINUE_BUTTON = 1;
+const GAMEPAD_MENU_BUTTON = 0;
 
 export class SectorCompleteScene extends Phaser.Scene {
   constructor() {

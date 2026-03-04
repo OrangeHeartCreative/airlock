@@ -241,18 +241,19 @@ export class StartScene extends Phaser.Scene {
     return this.getGamepadAxisValue(0) >= MENU_STICK_DEADZONE || this.isGamepadButtonPressed(15);
   }
 
-  isGamepadConfirmPressed() {
+  getConfirmCandidates() {
     const controls = getControlConfig(this.registry);
     const interactButton = controls?.gamepad?.interactButton ?? 0;
-    const fallbackButtons = [0, 1, 2, 3];
-    const confirmCandidates = [interactButton, ...fallbackButtons.filter((button) => button !== interactButton)];
-    return this.isAnyGamepadButtonPressed(confirmCandidates);
+    return [interactButton];
+  }
+
+  isGamepadConfirmPressed() {
+    return this.isAnyGamepadButtonPressed(this.getConfirmCandidates());
   }
 
   isGamepadBackPressed() {
-    const controls = getControlConfig(this.registry);
-    const interactButton = controls?.gamepad?.interactButton ?? 0;
-    const backCandidates = [1, 2, 3, 0].filter((button) => button !== interactButton);
+    const confirmCandidates = this.getConfirmCandidates();
+    const backCandidates = [1, 2, 3, 0].filter((button) => !confirmCandidates.includes(button));
     return this.isAnyGamepadButtonPressed(backCandidates);
   }
 
@@ -625,13 +626,13 @@ export class StartScene extends Phaser.Scene {
 
     switch (actionValue) {
       case 'firePrimaryButton':
-        return String(gamepadConfig.firePrimaryButton);
+        return gamepadConfig.firePrimaryButton == null ? 'Unbound' : String(gamepadConfig.firePrimaryButton);
       case 'fireSecondaryButton':
-        return String(gamepadConfig.fireSecondaryButton);
+        return gamepadConfig.fireSecondaryButton == null ? 'Unbound' : String(gamepadConfig.fireSecondaryButton);
       case 'interactButton':
-        return String(gamepadConfig.interactButton);
+        return gamepadConfig.interactButton == null ? 'Unbound' : String(gamepadConfig.interactButton);
       case 'pauseButton':
-        return String(gamepadConfig.pauseButton);
+        return gamepadConfig.pauseButton == null ? 'Unbound' : String(gamepadConfig.pauseButton);
       default:
         return 'Unbound';
     }

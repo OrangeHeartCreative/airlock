@@ -67,7 +67,7 @@ function removeStaleTextures(scene) {
   });
 }
 
-// ========================== PLAYER (24×24 × 4) ==============================
+// ========================== PLAYER (32×32 × 4) ==============================
 
 const PLAYER = {
   W: 32, H: 32, FRAMES: 4,
@@ -764,7 +764,7 @@ function buildSafeZoneTile(scene) {
     const alpha = Math.round(intensity * 255);
 
     // Dark base with green tint
-    ctx.fillStyle = `rgba(15,40,25,${alpha})`;
+    ctx.fillStyle = `rgba(15,40,25,${alpha / 255})`;
     ctx.fillRect(ox, 0, 32, 32);
 
     // Green border glow

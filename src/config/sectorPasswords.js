@@ -25,7 +25,11 @@ export function resolveSectorPassword(inputValue) {
     return Number(matchedCode[0]);
   }
 
-  const compactInput = normalizedInput.replace(/[\s_-]+/g, '');
+  if (normalizedInput.includes('-')) {
+    return null;
+  }
+
+  const compactInput = normalizedInput.replace(/[\s_]+/g, '');
   let sectorNumber = null;
 
   if (/^\d+$/.test(compactInput)) {
