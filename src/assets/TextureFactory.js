@@ -53,7 +53,7 @@ function circle(ctx, cx, cy, r, color) {
 // ========================= TEXTURE KEY REGISTRY =============================
 
 const TEXTURE_KEYS = [
-  'player', 'bullet', 'spore', 'brute', 'stalker', 'node',
+  'player', 'bullet', 'spore', 'brute', 'stalker', 'queen', 'node',
   'ammo', 'oxygen', 'medkit', 'weaponPickup',
   'spark', 'puff', 'muzzleFlash',
   'floorTile', 'wallTile', 'safeZoneTile'
@@ -363,6 +363,78 @@ function drawStalkerFrame(ctx, ox, frame) {
   // Stripe pattern on mid segment
   fill(ctx, ox + 17, cy - 2 + segShift, 6, 1, STALKER.bright);
   fill(ctx, ox + 17, cy + 2 + segShift, 6, 1, STALKER.bright);
+}
+
+// =========================== QUEEN (60×50 × 3) =============================
+
+const QUEEN = {
+  W: 60, H: 50, FRAMES: 3,
+  out: '#5d1a4d', dark: '#8d2a5d', shell: '#ad4a8d', 
+  mid: '#cd6aad', light: '#ed8acd', bright: '#fdb2ed',  
+  crown: '#ffccff', eye: '#ff4477', spike: '#dd2266'
+};
+
+function buildQueenTexture(scene) {
+  const { W, H, FRAMES } = QUEEN;
+  const tex = scene.textures.createCanvas('queen', W * FRAMES, H);
+  const ctx = tex.context;
+
+  for (let f = 0; f < FRAMES; f++) {
+    drawQueenFrame(ctx, f * W, f);
+  }
+
+  tex.refresh();
+  for (let i = 0; i < FRAMES; i++) {
+    tex.add(i, 0, i * W, 0, W, H);
+  }
+}
+
+function drawQueenFrame(ctx, ox, frame) {
+  const cx = 30;
+  const cy = 25;
+  const pulse = [0, 1, 0][frame]; // Pulsing effect
+
+  // Main body - large egg-like shape 
+  fill(ctx, ox + 8, 8, 44 + pulse, 34 + pulse, QUEEN.out);
+  fill(ctx, ox + 10, 10, 40 + pulse, 30 + pulse, QUEEN.dark);
+  fill(ctx, ox + 12, 12, 36 + pulse, 26 + pulse, QUEEN.shell);
+  fill(ctx, ox + 14, 14, 32 + pulse, 22 + pulse, QUEEN.mid);
+  fill(ctx, ox + 16, 16, 28 + pulse, 18 + pulse, QUEEN.light);
+  
+  // Crown spikes
+  for (let i = 0; i < 5; i++) {
+    const spikeX = 18 + i * 6;
+    fill(ctx, ox + spikeX, 2, 3, 12 + pulse, QUEEN.spike);
+    fill(ctx, ox + spikeX + 1, 1, 1, 8 + pulse, QUEEN.crown);
+  }
+  
+  // Eyes - multiple glowing eyes
+  pixel(ctx, ox + 20, 18, QUEEN.eye);
+  pixel(ctx, ox + 25, 16, QUEEN.eye);
+  pixel(ctx, ox + 30, 18, QUEEN.eye);
+  pixel(ctx, ox + 35, 16, QUEEN.eye);
+  pixel(ctx, ox + 40, 18, QUEEN.eye);
+  
+  // Side appendages/arms
+  fill(ctx, ox + 4, 20, 8, 6, QUEEN.dark);
+  fill(ctx, ox + 48, 20, 8, 6, QUEEN.dark);
+  fill(ctx, ox + 2, 22, 6, 2, QUEEN.spike);
+  fill(ctx, ox + 52, 22, 6, 2, QUEEN.spike);
+  
+  // Bottom tentacles 
+  for (let t = 0; t < 6; t++) {
+    const tentX = 12 + t * 6;
+    fill(ctx, ox + tentX, 42, 2, 6 + pulse, QUEEN.dark);
+    if (t % 2 === frame % 2) { // Alternating movement
+      fill(ctx, ox + tentX - 1, 44, 4, 2, QUEEN.mid);
+    }
+  }
+  
+  // Pulsing core
+  if (pulse > 0) {
+    fill(ctx, ox + 24, 20, 12, 8, QUEEN.bright);
+    pixel(ctx, ox + 30, 24, QUEEN.crown);
+  }
 }
 
 // ======================== OBJECTIVE NODE (22×22 × 4) ========================
@@ -801,6 +873,7 @@ const ANIMATION_KEYS = [
   'spore_pulse',
   'brute_lumber',
   'stalker_skitter',
+  'queen_throb',
   'node_pulse',
   'ammo_glow',
   'oxygen_glow',
@@ -859,6 +932,13 @@ function buildAnimations(scene) {
     frameRate: 6,
     repeat: -1,
     yoyo: true
+  });
+
+  scene.anims.create({
+    key: 'queen_throb',
+    frames: buildFrameArray('queen', 3),
+    frameRate: 2,
+    repeat: -1
   });
 
   scene.anims.create({
@@ -934,6 +1014,7 @@ export function buildAllTextures(scene, sectorLayout) {
   buildSporeTexture(scene);
   buildBruteTexture(scene);
   buildStalkerTexture(scene);
+  buildQueenTexture(scene);
   buildBulletTexture(scene);
   buildNodeTexture(scene);
 

@@ -529,7 +529,7 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    this.cameras.main.setZoom(1.6);
+    this.cameras.main.setZoom(2.0);
     this.cameras.main.setViewport(0, HUD_HEIGHT, this.scale.width, this.scale.height - HUD_HEIGHT);
 
     this.hudCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
@@ -1043,11 +1043,11 @@ export class GameScene extends Phaser.Scene {
     addHudEl(this.add.text(14, 48, 'HP', {
       fontFamily: 'monospace', fontSize: '11px', color: '#88aa88'
     }).setScrollFactor(0).setDepth(101));
-    this.hud.healthBarBg = addHudEl(this.add.rectangle(40, 50, 186, 12, 0x1a0a0a)
+    this.hud.healthBarBg = addHudEl(this.add.rectangle(40, 50, 220, 14, 0x1a0a0a)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(101));
-    this.hud.healthBarFill = addHudEl(this.add.rectangle(41, 51, 184, 10, 0x44cc44)
+    this.hud.healthBarFill = addHudEl(this.add.rectangle(41, 51, 218, 12, 0x44cc44)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(102));
-    this.hud.healthBarBorder = addHudEl(this.add.rectangle(40, 50, 186, 12)
+    this.hud.healthBarBorder = addHudEl(this.add.rectangle(40, 50, 220, 14)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(102).setStrokeStyle(1, 0x44cc44, 0.5).setFillStyle());
     this.hud.healthText = addHudEl(this.add.text(133, 49, '', {
       fontFamily: 'monospace', fontSize: '10px', color: '#ffffff'
@@ -1058,11 +1058,11 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'monospace', fontSize: '11px', color: '#88aacc'
     }).setScrollFactor(0).setDepth(101));
     this.hud.ammoBarLabel = this.hudElements[this.hudElements.length - 1];
-    this.hud.ammoBarBg = addHudEl(this.add.rectangle(40, 72, 186, 12, 0x0a0a1a)
+    this.hud.ammoBarBg = addHudEl(this.add.rectangle(40, 72, 220, 14, 0x0a0a1a)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(101));
-    this.hud.ammoBarFill = addHudEl(this.add.rectangle(41, 73, 184, 10, 0x5588cc)
+    this.hud.ammoBarFill = addHudEl(this.add.rectangle(41, 73, 218, 12, 0x5588cc)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(102));
-    this.hud.ammoBarBorder = addHudEl(this.add.rectangle(40, 72, 186, 12)
+    this.hud.ammoBarBorder = addHudEl(this.add.rectangle(40, 72, 220, 14)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(102).setStrokeStyle(1, 0x5588cc, 0.5).setFillStyle());
     this.hud.ammoText = addHudEl(this.add.text(133, 71, '', {
       fontFamily: 'monospace', fontSize: '10px', color: '#ffffff'
@@ -1072,11 +1072,11 @@ export class GameScene extends Phaser.Scene {
     addHudEl(this.add.text(14, 92, 'O\u2082', {
       fontFamily: 'monospace', fontSize: '11px', color: '#88cccc'
     }).setScrollFactor(0).setDepth(101));
-    this.hud.oxyBarBg = addHudEl(this.add.rectangle(40, 94, 186, 12, 0x0a1a1a)
+    this.hud.oxyBarBg = addHudEl(this.add.rectangle(40, 94, 220, 14, 0x0a1a1a)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(101));
-    this.hud.oxyBarFill = addHudEl(this.add.rectangle(41, 95, 184, 10, 0x44aaaa)
+    this.hud.oxyBarFill = addHudEl(this.add.rectangle(41, 95, 218, 12, 0x44aaaa)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(102));
-    this.hud.oxyBarBorder = addHudEl(this.add.rectangle(40, 94, 186, 12)
+    this.hud.oxyBarBorder = addHudEl(this.add.rectangle(40, 94, 220, 14)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(102).setStrokeStyle(1, 0x44aaaa, 0.5).setFillStyle());
     this.hud.oxyText = addHudEl(this.add.text(133, 93, '', {
       fontFamily: 'monospace', fontSize: '10px', color: '#ffffff'
@@ -1086,11 +1086,11 @@ export class GameScene extends Phaser.Scene {
     this.hud.ctmLabel = addHudEl(this.add.text(14, 114, 'CTM', {
       fontFamily: 'monospace', fontSize: '11px', color: '#cc88aa'
     }).setScrollFactor(0).setDepth(101));
-    this.hud.ctmBarBg = addHudEl(this.add.rectangle(40, 116, 186, 12, 0x1a0a14)
+    this.hud.ctmBarBg = addHudEl(this.add.rectangle(40, 116, 220, 14, 0x1a0a14)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(101));
-    this.hud.ctmBarFill = addHudEl(this.add.rectangle(41, 117, 0, 10, 0xcc4488)
+    this.hud.ctmBarFill = addHudEl(this.add.rectangle(41, 117, 0, 12, 0xcc4488)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(102));
-    this.hud.ctmBarBorder = addHudEl(this.add.rectangle(40, 116, 186, 12)
+    this.hud.ctmBarBorder = addHudEl(this.add.rectangle(40, 116, 220, 14)
       .setOrigin(0, 0).setScrollFactor(0).setDepth(102).setStrokeStyle(1, 0xcc4488, 0.3).setFillStyle());
     this.hud.ctmText = addHudEl(this.add.text(133, 115, '', {
       fontFamily: 'monospace', fontSize: '10px', color: '#ffffff'
@@ -1135,6 +1135,7 @@ export class GameScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.projectiles, this.enemies, this.onProjectileHitEnemy, null, this);
     this.physics.add.overlap(this.projectiles, this.objectiveNodes, this.onProjectileHitNode, null, this);
+    this.physics.add.overlap(this.projectiles, this.walls, this.onProjectileHitWall, null, this);
     this.physics.add.overlap(this.player, this.enemies, this.onPlayerHitEnemy, null, this);
     this.physics.add.overlap(this.player, this.pickups, this.onPickupCollected, null, this);
   }
@@ -1627,6 +1628,19 @@ export class GameScene extends Phaser.Scene {
     }
 
     const directDirection = toPlayer.normalize();
+    
+    // Queen has unique aggressive pursuit pattern
+    if (enemyType === 'queen') {
+      const movementSeed = Number(enemy.getData('movementSeed')) || 0;
+      const huntingPhase = time * 0.002 + movementSeed * Math.PI;
+      const huntingIntensity = 0.12;
+      const lateralDirection = new Phaser.Math.Vector2(-directDirection.y, directDirection.x)
+        .scale(Math.sin(huntingPhase * 2) * huntingIntensity);
+      
+      // More direct pursuit than spores, but with slight serpentine movement
+      return directDirection.add(lateralDirection).normalize();
+    }
+    
     if (enemyType !== 'spore' || distanceToPlayer < 90) {
       return directDirection;
     }
@@ -1688,7 +1702,7 @@ export class GameScene extends Phaser.Scene {
     enemy.setCollideWorldBounds(true);
     enemy.clearTint();
 
-    const enemyAnimKeys = { spore: 'spore_pulse', brute: 'brute_lumber', stalker: 'stalker_skitter' };
+    const enemyAnimKeys = { spore: 'spore_pulse', brute: 'brute_lumber', stalker: 'stalker_skitter', queen: 'queen_throb' };
     if (enemyAnimKeys[type]) {
       enemy.play(enemyAnimKeys[type]);
     }
@@ -1782,6 +1796,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   getEnemyTypeByRoll(typeRoll) {
+    // In Sector 12, only spawn the Queen boss (once) or regular enemies
+    if (this.sectorIndex === 12) {
+      const existingQueen = this.enemies.getChildren().find(enemy => enemy.getData('type') === 'queen');
+      if (!existingQueen && typeRoll > 85) {
+        return 'queen';
+      }
+      // Fall through to regular enemies if Queen already exists
+    }
+
     const progression = this.getSectorProgressScalar();
     const stalkerThreshold = 94 - progression * 14;
     const bruteThreshold = 74 - progression * 10;
@@ -1817,12 +1840,19 @@ export class GameScene extends Phaser.Scene {
       stalker: {
         health: Math.round(48 * healthMultiplier + progression * 8),
         speed: Math.round(118 + this.waveLevel * 4 + progression * 18 - relief * speedReliefByType.stalker)
+      },
+      queen: {
+        health: Math.round(450 * healthMultiplier + progression * 150), // Massive health pool
+        speed: Math.round(75 + this.waveLevel * 2) // Slower but devastating
       }
     };
 
     statsByType.spore.speed = Math.max(70, statsByType.spore.speed);
     statsByType.brute.speed = Math.max(54, statsByType.brute.speed);
     statsByType.stalker.speed = Math.max(96, statsByType.stalker.speed);
+    if (statsByType.queen) {
+      statsByType.queen.speed = Math.max(60, statsByType.queen.speed);
+    }
 
     return statsByType[type] || statsByType.spore;
   }
@@ -1840,7 +1870,8 @@ export class GameScene extends Phaser.Scene {
     const comfortDistanceByType = {
       spore: 86,
       brute: 96,
-      stalker: 106
+      stalker: 106,
+      queen: 140 // Queen is more aggressive at longer range
     };
 
     const comfortDistance = comfortDistanceByType[enemyType] ?? 88;
@@ -2028,14 +2059,35 @@ export class GameScene extends Phaser.Scene {
     this.showFloatingPickupText(`-${Math.ceil(totalDamage)}`, '#ffd48f', enemy.x, enemy.y - 18);
     this.spawnParticleEffect(enemy.x, enemy.y, 'spark', 'spark_burst');
 
+    // Special effects for Queen
+    if (enemy.getData('type') === 'queen') {
+      this.cameras.main.shake(180, 0.008);
+      this.showFloatingPickupText('QUEEN HIT!', '#ff88cc', enemy.x, enemy.y - 45);
+    }
+
     if (enemy.health > 0) {
       this.playSound('sfx_enemy_hit');
       this.showFloatingPickupText(`${Math.ceil(enemy.health)} HP`, '#ffe6ea', enemy.x, enemy.y - 34);
     }
 
     if (enemy.health <= 0) {
-      this.playSound('sfx_enemy_death');
-      this.spawnParticleEffect(enemy.x, enemy.y, 'puff', 'puff_fade');
+      if (enemy.getData('type') === 'queen') {
+        // Special Queen death effects
+        this.playSound('sfx_enemy_death');
+        this.cameras.main.shake(600, 0.015);
+        this.showFloatingPickupText('QUEEN DESTROYED!', '#5aff9a', enemy.x, enemy.y - 60);
+        // Create multiple particle effects for dramatic death
+        for (let i = 0; i < 5; i++) {
+          const offsetX = Phaser.Math.Between(-20, 20);
+          const offsetY = Phaser.Math.Between(-20, 20);
+          this.time.delayedCall(i * 100, () => {
+            this.spawnParticleEffect(enemy.x + offsetX, enemy.y + offsetY, 'puff', 'puff_fade');
+          });
+        }
+      } else {
+        this.playSound('sfx_enemy_death');
+        this.spawnParticleEffect(enemy.x, enemy.y, 'puff', 'puff_fade');
+      }
       enemy.disableBody(true, true);
     }
   }
@@ -2065,6 +2117,10 @@ export class GameScene extends Phaser.Scene {
     this.objective.progress += 1;
     this.objective.nodesRemaining = this.getActiveObjectiveNodeCount();
     this.showFloatingPickupText('SPAWNER DISABLED', '#9ef0b2', node.x, node.y - 34);
+  }
+
+  onProjectileHitWall(projectile, wall) {
+    projectile.disableBody(true, true);
   }
 
   getActiveObjectiveNodeCount() {
@@ -2358,13 +2414,22 @@ export class GameScene extends Phaser.Scene {
     this.projectiles.clear(true, true);
     this.pickups.clear(true, true);
 
-    this.scene.start('SectorCompleteScene', {
-      sectorIndex: this.sectorIndex,
-      nextSectorIndex: this.sectorIndex + 1,
-      carriedResources: { ...this.resources },
-      carriedWeaponId: this.equippedWeaponId,
-      carriedWaveLevel: this.waveLevel
-    });
+    // Special victory handling for Sector 12 (final boss defeated)
+    if (this.sectorIndex === 12) {
+      this.scene.start('GameOverScene', {
+        victory: true,
+        carriedResources: { ...this.resources },
+        finalSector: 12
+      });
+    } else {
+      this.scene.start('SectorCompleteScene', {
+        sectorIndex: this.sectorIndex,
+        nextSectorIndex: this.sectorIndex + 1,
+        carriedResources: { ...this.resources },
+        carriedWeaponId: this.equippedWeaponId,
+        carriedWaveLevel: this.waveLevel
+      });
+    }
   }
 
   isInSafeRoom() {
@@ -2386,7 +2451,7 @@ export class GameScene extends Phaser.Scene {
 
     // Health bar
     const healthPct = Phaser.Math.Clamp(this.resources.health / 100, 0, 1);
-    this.hud.healthBarFill.width = Math.round(184 * healthPct);
+    this.hud.healthBarFill.width = Math.round(218 * healthPct);
     this.hud.healthText.setText(`${Math.ceil(this.resources.health)}`);
     if (healthPct > 0.5) {
       this.hud.healthBarFill.setFillStyle(0x44cc44);
@@ -2408,7 +2473,7 @@ export class GameScene extends Phaser.Scene {
       ? Phaser.Math.Clamp(1 - ammoValue / ammoMax, 0, 1)
       : Phaser.Math.Clamp(ammoValue / ammoMax, 0, 1);
     this.hud.ammoBarLabel.setText(ammoLabel.substring(0, 3).toUpperCase());
-    this.hud.ammoBarFill.width = Math.round(184 * ammoPct);
+    this.hud.ammoBarFill.width = Math.round(218 * ammoPct);
     this.hud.ammoText.setText(isHeatWeapon ? `${ammoMax - ammoValue}` : `${ammoValue}`);
     const ammoColor = weapon.id === 'incineratorCarbine' ? 0xff7a44
       : isHeatWeapon ? 0x44ccff : 0x5588cc;
@@ -2417,7 +2482,7 @@ export class GameScene extends Phaser.Scene {
 
     // Oxygen bar
     const oxyPct = Phaser.Math.Clamp(this.resources.oxygen / 100, 0, 1);
-    this.hud.oxyBarFill.width = Math.round(184 * oxyPct);
+    this.hud.oxyBarFill.width = Math.round(218 * oxyPct);
     this.hud.oxyText.setText(`${Math.ceil(this.resources.oxygen)}`);
 
     // Contamination bar
@@ -2425,7 +2490,7 @@ export class GameScene extends Phaser.Scene {
     const ctmOverdose = ctmPct >= 1;
     const ctmFillColor = ctmOverdose ? 0xff2244 : 0xcc4488;
     const ctmBorderAlpha = ctmOverdose ? 0.8 : 0.3;
-    this.hud.ctmBarFill.width = Math.round(184 * ctmPct);
+    this.hud.ctmBarFill.width = Math.round(218 * ctmPct);
     this.hud.ctmBarFill.setFillStyle(ctmFillColor);
     this.hud.ctmBarBorder.setStrokeStyle(1, ctmFillColor, ctmBorderAlpha);
     this.hud.ctmLabel.setColor(ctmOverdose ? '#ff2244' : '#cc88aa');

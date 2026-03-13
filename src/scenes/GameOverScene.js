@@ -16,12 +16,15 @@ export class GameOverScene extends Phaser.Scene {
     this.menuOptions = [];
   }
 
-  create() {
+  create(data = {}) {
     this.transitionQueued = false;
     this.previousGamepadButtons = {};
     this.previousStickDirections = { up: false, down: false };
     this.menuSelection = 0;
     this.menuOptions = [];
+    
+    const isVictory = data?.victory === true;
+    const finalSector = data?.finalSector || 12;
 
     if (this.input.gamepad) {
       this.input.gamepad.once('connected', (pad) => {
@@ -40,12 +43,33 @@ export class GameOverScene extends Phaser.Scene {
     this.add.rectangle(width / 2, height * 0.65, 380, 200, 0x0a1210, 0.88)
       .setOrigin(0.5).setStrokeStyle(1, 0x3dff8a, 0.28);
 
-    this.add.text(width / 2, height * 0.28, 'GAME OVER', {
-      fontFamily: 'monospace',
-      fontSize: '52px',
-      color: '#ff7755',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
+    if (isVictory) {
+      this.add.text(width / 2, height * 0.28, 'VICTORY!', {
+        fontFamily: 'monospace',
+        fontSize: '52px',
+        color: '#5aff9a',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+      
+      this.add.text(width / 2, height * 0.42, `THE QUEEN IS DESTROYED`, {
+        fontFamily: 'monospace',
+        fontSize: '16px',
+        color: '#c0d8cc'
+      }).setOrigin(0.5);
+      
+      this.add.text(width / 2, height * 0.46, `ALL 12 SECTORS CLEARED`, {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        color: '#88aa88'
+      }).setOrigin(0.5);
+    } else {
+      this.add.text(width / 2, height * 0.28, 'GAME OVER', {
+        fontFamily: 'monospace',
+        fontSize: '52px',
+        color: '#ff7755',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+    }
 
     this.menuOptions = [
       this.createMenuOption(width / 2, height * 0.6, 'Restart', () => this.restartRun()),
