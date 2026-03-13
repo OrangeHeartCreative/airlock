@@ -4,7 +4,7 @@ Top-down survival shooter built with Phaser 3 + Vite.
 
 ## Status
 
-**v1.0 — Ship candidate.** Full 12-sector run loop implemented and validated.
+**v1.1.0 — Enhanced release.** Improved camera zoom, enlarged HUD elements, and fixed projectile collision.
 
 - Canonical development guide: `docs/development-guide.md`
 
